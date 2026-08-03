@@ -26,10 +26,10 @@ from __future__ import annotations
 import shutil
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 from check_formatting import cli as check_formatting
 
@@ -121,7 +121,7 @@ def test_check_rst_full_scan_uses_recursive_configured_dir(tmp_path: Path, monke
 
 
 def test_check_rst_full_scan_without_configured_dir_fails_clearly(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A requested full scan must not silently collapse to check_rst's bare,
     Git-changed scope when [rst].dir is absent."""
@@ -132,9 +132,11 @@ def test_check_rst_full_scan_without_configured_dir_fails_clearly(
     monkeypatch.setattr(check_formatting, "_run", fake_run)
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/check_rst")
 
-    ok = check_formatting._check_rst(tmp_path, explicit_files=None)
+    with pytest.raises(SystemExit) as exc_info:
+        check_formatting._check_rst(tmp_path, explicit_files=None)
 
-    assert ok is False
+    assert exc_info.value.code == 1
+    assert "[rst].dir is required" in capsys.readouterr().out
 
 
 def test_check_rst_selected_file_fails_when_backend_is_missing(
