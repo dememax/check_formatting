@@ -350,6 +350,37 @@ def test_checker_kwargs_use_mypy_specific_dirs_when_configured(tmp_path: Path) -
     assert check_formatting._checker_kwargs("mypy", config) == {"dirs": ["bin/std.py", "tests"]}
 
 
+@pytest.mark.parametrize("checker", ["python", "mypy"])
+def test_python_checkers_restrict_explicit_files_to_configured_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, checker: str
+) -> None:
+    """Changed-file and explicit-file scopes must retain configured target
+    boundaries instead of accepting every selected .py file."""
+    included = tmp_path / "tests" / "test_std.py"
+    included.parent.mkdir()
+    included.write_text("def test_std() -> None:\n    pass\n")
+    excluded = tmp_path / "bin" / "legacy_migration.py"
+    excluded.parent.mkdir()
+    excluded.write_text("value = 1\n")
+    captured: list[list[str]] = []
+
+    def fake_run(cmd: list[str], cwd: Path) -> int:
+        captured.append(cmd)
+        return 0
+
+    monkeypatch.setattr(check_formatting, "_run", fake_run)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(pathlib.Path, "exists", lambda self: False)
+
+    check = check_formatting._check_python if checker == "python" else check_formatting._check_mypy
+    ok = check(tmp_path, explicit_files=[included, excluded], dirs=["bin/std.py", "tests"])
+
+    assert ok is True
+    assert captured
+    assert all(str(included) in cmd for cmd in captured)
+    assert all(str(excluded) not in cmd for cmd in captured)
+
+
 def test_check_clang_tidy_uses_configured_build_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """_check_clang_tidy must follow a config-sourced build_dir, not the hardcoded _CLANG_TIDY_DB."""
     root = tmp_path
