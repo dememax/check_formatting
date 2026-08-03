@@ -162,3 +162,13 @@ def test_is_git_auto_detected_scope_false_for_all_flag() -> None:
 
 def test_is_git_auto_detected_scope_false_for_explicit_file_args() -> None:
     assert check_formatting._is_git_auto_detected_scope(["foo.rst"], False) is False
+
+
+def test_rst_fix_hint_matches_effective_scope(tmp_path: Path) -> None:
+    """The command printed after an RST failure must not reintroduce ordinary
+    --fix into the routine Git-scoped workflow."""
+    (tmp_path / ".check_formatting.toml").write_text('checks = ["rst"]\n')
+    config = check_formatting._load_project_config(tmp_path)
+
+    assert check_formatting._fix_command("rst", config, git_auto_detected=True) == "check_rst --fix-only"
+    assert check_formatting._fix_command("rst", config, git_auto_detected=False) == "check_rst --fix"
