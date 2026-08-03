@@ -104,6 +104,10 @@ globs = ["src/**/*.cpp", "src/**/*.hpp"]
 
 [python]
 dirs = ["scripts", "tests"]
+
+# Optional: omit this table to type-check the same targets as Ruff.
+[mypy]
+dirs = ["src", "tests"]
 ```
 
 Unknown checker names, unknown top-level keys, unknown keys within a
@@ -119,11 +123,13 @@ check_rst's own discovery contract exactly.
 ### Ignoring files
 
 `.formatting-ignore` at the project root excludes files/directories from
-every checker, in a `.gitignore`-like syntax (blank lines and `#`
+wrapper-selected checkers, in a `.gitignore`-like syntax (blank lines and `#`
 comments skipped; a trailing `/` or `/**` excludes a whole directory; a
 pattern containing `/` matches the full relative path; a bare pattern
 matches only the file's basename). `--exclude PATTERN` (repeatable) adds
 an ad hoc, single-invocation exclusion without editing the committed file.
+RST is the exception: `check_rst` owns its native selection, so invoke
+`check_rst --recursive ... --exclude ...` directly for an excluded RST audit.
 
 ## Checkers
 
@@ -135,8 +141,8 @@ an ad hoc, single-invocation exclusion without editing the committed file.
 | `python` | ruff (format + lint) | `[python].dirs` |
 | `json` | prettier | `[json].files` |
 | `ini` | prettier (prettier-plugin-ini) | `[ini].globs` |
-| `mypy` | mypy | `[python].dirs` (shared with `python`) |
-| `rst` | check_rst | `[rst].dir` (for a full-repo `--recursive` scan) |
+| `mypy` | mypy | `[mypy].dirs`, falling back to `[python].dirs` |
+| `rst` | check_rst | `[rst].dir` (required for a full-repo `--recursive` scan) |
 | `clang-tidy` | clang-tidy | `[clang_tidy].build_dir` |
 | `cmake` | cmake-format | (discovers `CMakeLists.txt` recursively) |
 | `kconfig` | `west build --cmake-only` | `[kconfig].build_combos` |
@@ -236,6 +242,13 @@ whole-file scope risky there.
 | `kconfig` | west build --cmake-only | N/A — validates merged Kconfig state across all `.conf` files together |
 | `shell` | shellcheck | No known native flag |
 | `rst` | check_rst | Yes — check_rst's own git integration |
+
+For RST, default Git-scoped fixing uses `check_rst --fix-only` and diff
+mode uses `check_rst --diff-only`. Explicit files and configured recursive
+scans retain ordinary `--fix` because those scopes deliberately request
+whole-file validation. An RST `--all` run without `[rst].dir` is an error;
+the tool never silently substitutes a changed-file scan for a requested full
+scan.
 
 ## License
 

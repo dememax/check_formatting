@@ -339,9 +339,7 @@ def test_check_mypy_uses_configured_dirs_matching_python(tmp_path: Path, monkeyp
 def test_checker_kwargs_use_mypy_specific_dirs_when_configured(tmp_path: Path) -> None:
     """Mypy may intentionally cover a narrower source set than Ruff."""
     (tmp_path / ".check_formatting.toml").write_text(
-        'checks = ["python", "mypy"]\n\n'
-        '[python]\ndirs = ["bin", "tests"]\n\n'
-        '[mypy]\ndirs = ["bin/std.py", "tests"]\n'
+        'checks = ["python", "mypy"]\n\n[python]\ndirs = ["bin", "tests"]\n\n[mypy]\ndirs = ["bin/std.py", "tests"]\n'
     )
 
     config = check_formatting._load_project_config(tmp_path)

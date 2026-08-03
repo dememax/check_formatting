@@ -43,7 +43,7 @@ mechanism — not every checker can offer it, and it comes in two tiers:
 
 Native tier — tool-guaranteed, applies to check/verbose/diff/fix alike
     - ``rst``  — check_rst's own bare-mode git integration (native,
-      first-party; see :func:`_check_rst` and check_rst.rst's "History
+      first-party; see :func:`_check_rst` and check_rst's guide, "History
       protection: bare mode and selective Git scope").
     - ``cpp``  — clang-format's native ``-lines=<start>:<end>``, computed
       per file from ``git diff -U0 HEAD`` via :func:`_git_diff_hunk_ranges`
@@ -103,10 +103,10 @@ check (default)
     ini    — npx prettier --check on [ini].globs
              (prettier-plugin-ini; iniSpaceAroundEquals configured via
              overrides in .prettierrc)
-    mypy   — mypy strict type-checker on [python].dirs (shared with the
-             python checker; configuration from [tool.mypy] in pyproject.toml)
+    mypy   — mypy strict type-checker on [mypy].dirs, falling back to
+             [python].dirs; configuration from [tool.mypy] in pyproject.toml
     rst    — check_rst; three distinct scopes depending on how files were
-             selected (see _check_rst's docstring and check_rst.rst's
+             selected (see _check_rst's docstring and check_rst's guide,
              "History protection" for the full rationale): the default
              git-auto-detected scope runs check_rst bare (hunk-scoped —
              preserves check_rst's own "fix only what you changed"
@@ -114,7 +114,7 @@ check (default)
              that file explicitly (whole-file scope — the user asked for
              it), and explicit_files=None (--all, or a direct library
              call) runs check_rst --recursive on [rst].dir (a genuine
-             full-repo scan; falls back to bare if [rst].dir is unset).
+             full-repo scan; missing [rst].dir is an error).
              Sphinx facts come from .check_rst.toml at the repository root.
     clang-tidy, cmake, kconfig, shell, yaml — not necessarily in a given
              project's default ``checks`` list; see the module-level note above and
@@ -138,7 +138,7 @@ verbose (``--verbose``)
     python — ruff format --check + ruff check --output-format full
     json   — npx prettier --check --log-level log (same files as check mode)
     ini    — npx prettier --check --log-level log (same files as check mode)
-    mypy   — mypy --show-error-context [python].dirs
+    mypy   — mypy --show-error-context [mypy].dirs (or [python].dirs fallback)
     rst    — check_rst --verbose (adds context lines to each finding)
     clang-tidy, cmake, kconfig, shell, yaml — same file selection as check
              mode; most expose no extra diagnostic flags (see each
@@ -157,7 +157,7 @@ diff (``--diff``)
     json   — npx prettier <file> (stdout) vs original, via difflib
     ini    — npx prettier <file> (stdout) vs original, via difflib
     mypy   — same as check (mypy has no diff mode)
-    rst    — check_rst --diff (native unified diff of pending fixes)
+    rst    — check_rst --diff-only (native mechanical preview without validation)
     cmake  — cmake-format <file> (stdout) vs original, via difflib
     yaml   — npx prettier <file> (stdout) vs original, via difflib
     clang-tidy, kconfig, shell — same as check (none of the three
@@ -176,8 +176,9 @@ fix (``--fix``)
 
 Ignore file (``.formatting-ignore``)
     A ``.formatting-ignore`` file at the project root lists files and
-    directories that are excluded from all checks.  Its syntax is a
-    subset of ``.gitignore``:
+    directories excluded from wrapper-selected checks, except ``rst`` (whose
+    native scope remains authoritative).  Its syntax is a subset of
+    ``.gitignore``:
 
     - Blank lines and lines starting with ``#`` are ignored.
     - Patterns are relative to the project root and use forward slashes.
@@ -199,8 +200,9 @@ Ignore file (``.formatting-ignore``)
     for ``cpp``), or in any mode when explicit files are supplied.  Use
     the tools' own ignore mechanisms for finer control:
     ``.prettierignore`` for prettier, ``[tool.ruff.exclude]`` in
-    ``pyproject.toml`` for ruff.  The ``rst`` checker never consults
-    ``.formatting-ignore`` — use ``check_rst --exclude`` instead.
+    ``pyproject.toml`` for ruff.  The ``rst`` checker never consults this file
+    or the wrapper's ``--exclude`` option.  Run ``check_rst --recursive ...
+    --exclude ...`` directly when an RST tree audit needs exclusions.
 
 Prerequisites
 -------------
@@ -256,8 +258,8 @@ check_rst (``rst`` checker)
     selected checker.  A full-repo scan (``--all``, or a direct library call
     with no ``explicit_files``) additionally needs
     ``.check_formatting.toml``'s ``[rst].dir`` set to the project's RST root
-    (matching ``.check_rst.toml``'s ``sphinx-src``) — without it, that scope
-    falls back to check_rst's bare mode, which checks only git-changed files.
+    (matching ``.check_rst.toml``'s ``sphinx-src``).  Without it, the selected
+    full scan fails rather than silently checking only Git-changed files.
 
 clang-tidy (``clang-tidy`` checker — optional, project-dependent)
     Part of the LLVM toolchain, same install as clang-format above.
@@ -428,11 +430,12 @@ CLANG_TIDY_IGNORE_FILE = ".clang-tidy-ignore"
 _CONFIG_FILE = ".check_formatting.toml"
 
 # Known keys per config section (project-specific paths/globs/targets).
-# "python" is shared by both the python (ruff) and mypy checkers.
+# Mypy may override the Python (Ruff) target set, with Python dirs as fallback.
 _CONFIG_SECTIONS: dict[str, frozenset[str]] = {
     "cpp": frozenset({"globs"}),
     "web": frozenset({"globs"}),
     "python": frozenset({"dirs"}),
+    "mypy": frozenset({"dirs"}),
     "json": frozenset({"files"}),
     "ini": frozenset({"globs"}),
     "clang_tidy": frozenset({"build_dir"}),
@@ -453,6 +456,7 @@ class ProjectConfig:
     cpp_globs: list[str]
     web_globs: list[str]
     python_dirs: list[str]
+    mypy_dirs: list[str]
     json_files: list[str]
     ini_globs: list[str]
     clang_tidy_build_dir: str
@@ -519,11 +523,14 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
 
     checks = _require_str_list(data, "checks", _CONFIG_FILE)
     _validate_check_names(checks, _CONFIG_FILE)
+    python_dirs = _optional_section_str_list(data, "python", "dirs")
+    mypy_dirs = _optional_section_str_list(data, "mypy", "dirs") if "mypy" in data else python_dirs
     return ProjectConfig(
         checks=checks,
         cpp_globs=_optional_section_str_list(data, "cpp", "globs"),
         web_globs=_optional_section_str_list(data, "web", "globs"),
-        python_dirs=_optional_section_str_list(data, "python", "dirs"),
+        python_dirs=python_dirs,
+        mypy_dirs=mypy_dirs,
         json_files=_optional_section_str_list(data, "json", "files"),
         ini_globs=_optional_section_str_list(data, "ini", "globs"),
         clang_tidy_build_dir=_optional_section_str(data, "clang_tidy", "build_dir"),
@@ -955,6 +962,25 @@ def _resolve_under(path_str: str, root: pathlib.Path) -> pathlib.Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
+def _filter_configured_targets(
+    files: Sequence[pathlib.Path], root: pathlib.Path, targets: Sequence[str]
+) -> list[pathlib.Path]:
+    """Keep explicit *files* that equal or descend from configured *targets*.
+
+    An empty target list preserves the legacy direct-library behavior.  Once a
+    project declares targets, however, changed-file and explicit-file scopes
+    may narrow that set but must never expand beyond it.
+    """
+    if not targets:
+        return list(files)
+    resolved_targets = [_resolve_under(target, root) for target in targets]
+    return [
+        path
+        for path in files
+        if any(path.resolve() == target or path.resolve().is_relative_to(target) for target in resolved_targets)
+    ]
+
+
 def _filter_files(
     files: list[pathlib.Path],
     root: pathlib.Path,
@@ -1297,7 +1323,7 @@ def _check_cpp(
     file's actual changed hunks (via :func:`_lines_flags`, computed from
     ``git diff -U0 HEAD``) rather than the whole file — mirroring check_rst's
     own bare-mode hunk scoping and its rationale (see
-    :func:`_check_rst`'s docstring and check_rst.rst's "History protection").
+    :func:`_check_rst`'s docstring and check_rst's guide, "History protection").
     check/verbose/diff are scoped together with fix, not left whole-file,
     specifically so a routine ``--fix`` that only cleans up the diff isn't
     followed by a ``--check`` that fails forever on unrelated, pre-existing
@@ -1713,8 +1739,9 @@ def _check_python(
             log("  (no Python files in selection)")
             return True
         py_files, excluded = result
+        py_files = _filter_configured_targets(py_files, root, dirs)
         if not py_files:
-            log(f"  (all {excluded} Python file(s) excluded by {IGNORE_FILE})")
+            log("  (no Python files in configured targets after exclusions)")
             return True
         targets = [str(f) for f in py_files]
         targets_label = _file_count_label(len(py_files), excluded)
@@ -2043,7 +2070,10 @@ def _check_mypy(
     dirs: Sequence[str] = (),
     quiet: bool = False,
 ) -> bool:
-    """Run mypy strict type-checker on Python source files (*dirs* — shared with the ``python`` checker; empty by default).
+    """Run mypy strict type-checker on Python source files.
+
+    *dirs* comes from ``[mypy].dirs`` when declared, otherwise from the
+    ``[python].dirs`` compatibility fallback.
 
     mypy has no fix or diff mode; the same type-check is performed in all modes.
     Check mode:   ``mypy scripts tests``
@@ -2061,8 +2091,9 @@ def _check_mypy(
             log("  (no Python files in selection)")
             return True
         py_files, excluded = result
+        py_files = _filter_configured_targets(py_files, root, dirs)
         if not py_files:
-            log(f"  (all {excluded} Python file(s) excluded by {IGNORE_FILE})")
+            log("  (no Python files in configured targets after exclusions)")
             return True
         targets = [str(f) for f in py_files]
         targets_label = _file_count_label(len(py_files), excluded)
@@ -2390,7 +2421,7 @@ def _check_rst(
 
     check_rst distinguishes bare invocation (no file arguments — git-diff-scoped:
     adornment fixes apply only to changed hunks) from being given explicit
-    filenames (whole-file adornment scope — see check_rst.rst, "History
+    filenames (whole-file adornment scope — see check_rst's guide, "History
     protection: bare mode and selective Git scope").  Three distinct scopes
     map onto that distinction:
 
@@ -2407,7 +2438,7 @@ def _check_rst(
     - *explicit_files* is a list and *git_auto_detected* is False — the user
       (or a caller) genuinely named these files.  Pass them to check_rst
       directly: whole-file scope is the correct, explicitly-requested
-      behavior here (see check_rst.rst: "Fix a specific file in full only
+      behavior here (see check_rst's guide: "Fix a specific file in full only
       when the user explicitly confirms that file should be normalized").
     - *explicit_files* is ``None`` — a real full-repo scan is wanted (``--all``
       on the CLI, or a direct release-gate library call). Bare mode does NOT
@@ -2416,11 +2447,12 @@ def _check_rst(
       state"). Use
       ``check_rst --recursive <recursive_dir>`` (``.check_formatting.toml``'s
       ``[rst].dir``) for a genuine unconditional scan.  A project with no
-      ``[rst].dir`` configured falls back to the old bare behavior rather
-      than erroring — an incremental improvement, not a hard requirement.
+      ``[rst].dir`` fails clearly: silently falling back to bare mode would
+      violate ``--all``'s scope contract.
 
-    ``.formatting-ignore`` is not consulted: use check_rst's own
-    ``--exclude`` when a file must be skipped.
+    ``.formatting-ignore`` and the wrapper's ``--exclude`` are not consulted.
+    Run check_rst's recursive mode directly when an RST tree audit needs its
+    native ``--exclude`` option.
     """
     log = _make_log(quiet)
     if explicit_files is not None:
@@ -2430,6 +2462,10 @@ def _check_rst(
             log("  (no RST files in selection)")
             return True
         rst_files, _ = result
+
+    if explicit_files is None and not recursive_dir:
+        print("  ERROR: [rst].dir is required for an RST full scan (--all)")
+        return False
 
     rst_tool = shutil.which("check_rst")
     if rst_tool is None:
@@ -2451,11 +2487,12 @@ def _check_rst(
         base = [rst_tool]
 
     if fix:
-        log(f"▶ check_rst --fix  {label}")
-        return _run([base[0], "--fix", *base[1:]], cwd=root) == 0
+        mode = "--fix-only" if git_auto_detected else "--fix"
+        log(f"▶ check_rst {mode}  {label}")
+        return _run([base[0], mode, *base[1:]], cwd=root) == 0
     if diff:
-        log(f"▶ check_rst --diff  {label}")
-        return _run([base[0], "--diff", *base[1:]], cwd=root) == 0
+        log(f"▶ check_rst --diff-only  {label}")
+        return _run([base[0], "--diff-only", *base[1:]], cwd=root) == 0
     cmd = base
     if verbose:
         log(f"  {rst_tool}")
@@ -2502,7 +2539,7 @@ def _checker_kwargs(name: str, config: ProjectConfig, git_auto_detected: bool = 
         "python": {"dirs": config.python_dirs},
         "json": {"files": config.json_files, "git_auto_detected": git_auto_detected},
         "ini": {"globs": config.ini_globs, "git_auto_detected": git_auto_detected},
-        "mypy": {"dirs": config.python_dirs},
+        "mypy": {"dirs": config.mypy_dirs},
         "rst": {"recursive_dir": config.rst_dir, "git_auto_detected": git_auto_detected},
         "clang-tidy": {
             "cpp_globs": config.cpp_globs,
@@ -2515,7 +2552,7 @@ def _checker_kwargs(name: str, config: ProjectConfig, git_auto_detected: bool = 
     return by_name.get(name, {})
 
 
-def _fix_command(name: str, config: ProjectConfig) -> str:
+def _fix_command(name: str, config: ProjectConfig, *, git_auto_detected: bool = False) -> str:
     """Return the fix command shown when checker *name* reports a violation.
 
     Derived from the same config-sourced values threaded into the checker
@@ -2539,7 +2576,7 @@ def _fix_command(name: str, config: ProjectConfig) -> str:
     if name == "mypy":
         return "(mypy has no automatic fix — resolve type errors manually)"
     if name == "rst":
-        return "check_rst --fix"
+        return "check_rst --fix-only" if git_auto_detected else "check_rst --fix"
     if name == "clang-tidy":
         return "(clang-tidy has no automatic fix — resolve violations manually)"
     if name == "cmake":
@@ -2821,7 +2858,7 @@ def check_formatting(
                 print("FORMATTING: violations found. To fix, run:")
             for name in checks:
                 if not results.get(name, True):
-                    print(f"    {_fix_command(name, config)}")
+                    print(f"    {_fix_command(name, config, git_auto_detected=git_auto_detected)}")
             print()
             print("    (or re-run with --fix to apply all fixes at once)")
         return False

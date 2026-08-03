@@ -6,7 +6,7 @@
 clang-format is the one non-rst backend with a native line-range mechanism
 (``-lines=<start>:<end>``) that could restrict a ``--fix`` to just the lines
 that actually changed, mirroring check_rst's own bare-mode hunk scoping (see
-``tests/test_check_formatting_rst_scope.py`` and check_rst.rst's "History
+``tests/test_check_formatting_rst_scope.py`` and check_rst's guide, "History
 protection: bare mode and selective Git scope").  This is documented as an
 explicit, OPTIONAL per-checker contract — most other checkers' backends have
 no equivalent native mechanism at all (meson format, ruff format, mypy) or

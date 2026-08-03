@@ -59,6 +59,10 @@ A minimal configuration is::
    [python]
    dirs = ["scripts", "tests"]
 
+   # Optional: omit this table to type-check the same targets as Ruff.
+   [mypy]
+   dirs = ["src", "tests"]
+
 The configuration is a declaration, not auto-detection.  A missing file,
 malformed TOML, an unknown checker or key, a section of the wrong type, or a
 wrongly typed value is a hard error.  A valid section for a checker not listed
@@ -95,10 +99,10 @@ Registered checkers
      - ``[ini].globs``
    * - ``mypy``
      - ``mypy``
-     - Shares ``[python].dirs``
+     - ``[mypy].dirs``, falling back to ``[python].dirs``
    * - ``rst``
      - ``check_rst``
-     - ``[rst].dir`` for a recursive full scan
+     - ``[rst].dir``, required for a recursive full scan
    * - ``clang-tidy``
      - ``clang-tidy``
      - ``[cpp].globs`` and ``[clang_tidy].build_dir``
@@ -188,7 +192,8 @@ File selection
    * - ``--all``
      - Every configured target in the repository, regardless of Git state.
        ``rst`` uses ``check_rst --recursive`` with ``[rst].dir``.  This option
-       cannot be combined with FILE arguments.
+       cannot be combined with FILE arguments; selecting ``rst`` without a
+       configured directory is an error, never a changed-file fallback.
    * - ``-- FILE ...``
      - Exactly the named files, filtered through each checker's configured
        targets or fixed file domain.
@@ -217,9 +222,13 @@ Native tier
 
 ``rst``
    ``check_rst`` is invoked without explicit filenames for the auto-detected
-   scope, preserving its native Git-hunk behavior.  A user-provided RST file is
-   intentionally passed explicitly and therefore checked or fixed as a whole
-   file.  ``--all`` is a recursive whole-tree scan.
+   scope, preserving its native Git-hunk behavior.  Fix mode selects
+   ``--fix-only`` and diff mode selects ``--diff-only`` so the wrapper's
+   mutation-only and preview-only contracts do not trigger duplicate Sphinx
+   validation.  A user-provided RST file is intentionally passed explicitly
+   and therefore checked or fixed as a whole file; its fix mode retains
+   ordinary ``--fix``.  ``--all`` is a recursive whole-tree scan and requires
+   ``[rst].dir``.
 
 If no usable hunk range exists, such as for an untracked file or a pure
 deletion, ``cpp`` falls back to whole-file processing for that file.
@@ -300,10 +309,12 @@ Excluding files
    units that cannot be analyzed but remain valid ``clang-format`` targets.
 
 Backend limitations affect full-scan exclusions.  RST uses ``check_rst``'s own
-exclusion configuration.  Meson, Web, and Python delegate some full-scan modes
-to backend directory or glob processing, so their native ignore configuration
-may also be required.  Explicit-file, diff, and fix paths can apply the wrapper's
-per-file filtering directly.
+selection and does not receive either wrapper exclusion mechanism; invoke
+``check_rst --recursive ... --exclude ...`` directly for an excluded RST tree
+audit.  Meson, Web, and Python delegate some full-scan modes to backend
+directory or glob processing, so their native ignore configuration may also
+be required.  Explicit-file, diff, and fix paths can apply the wrapper's
+per-file filtering directly for other checkers.
 
 *******
 Usage
