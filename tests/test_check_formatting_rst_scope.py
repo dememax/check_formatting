@@ -15,7 +15,8 @@ calls) always ran check_rst bare, which is git-diff-scoped and therefore checks 
 on a clean release tree, contradicting `--all`'s "regardless of git state" contract.
 
 These tests pin the corrected behavior: auto-detected files run check_rst bare (to
-preserve hunk-scoping), `explicit_files=None` with a configured `[rst].dir` runs
+preserve hunk-scoping), mutation-only modes use check_rst's matching fast paths,
+`explicit_files=None` with a configured `[rst].dir` runs
 `check_rst --recursive <dir>` (a genuine full scan), and genuinely user-typed explicit
 files keep today's whole-file behavior.
 """
@@ -53,7 +54,28 @@ def test_check_rst_auto_detected_files_run_bare_not_explicit(tmp_path: Path, mon
     ok = check_formatting._check_rst(root, fix=True, explicit_files=[rst_file], git_auto_detected=True)
 
     assert ok is True
-    assert captured["cmd"] == ["/usr/bin/check_rst", "--fix"]
+    assert captured["cmd"] == ["/usr/bin/check_rst", "--fix-only"]
+
+
+def test_check_rst_diff_uses_preview_only_backend_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """check_formatting --diff promises only a mechanical preview, so it must
+    not select check_rst's ordinary --diff mode, which additionally runs lint,
+    docutils, and Sphinx validation phases."""
+    rst_file = tmp_path / "guide.rst"
+    rst_file.write_text("Guide\n=====\n")
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd: list[str], cwd: Path) -> int:
+        captured["cmd"] = cmd
+        return 0
+
+    monkeypatch.setattr(check_formatting, "_run", fake_run)
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/check_rst")
+
+    ok = check_formatting._check_rst(tmp_path, diff=True, explicit_files=[rst_file])
+
+    assert ok is True
+    assert captured["cmd"] == ["/usr/bin/check_rst", "--diff-only", str(rst_file)]
 
 
 def test_check_rst_user_typed_explicit_files_stay_whole_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,25 +120,21 @@ def test_check_rst_full_scan_uses_recursive_configured_dir(tmp_path: Path, monke
     assert captured["cmd"] == ["/usr/bin/check_rst", "--recursive", "docs"]
 
 
-def test_check_rst_full_scan_without_configured_dir_falls_back_to_bare(
+def test_check_rst_full_scan_without_configured_dir_fails_clearly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A project with no [rst].dir configured keeps today's bare-mode fallback for the
-    explicit_files=None case, rather than erroring — this is an incremental improvement,
-    not a hard requirement on every project using the rst checker."""
-    captured: dict[str, list[str]] = {}
+    """A requested full scan must not silently collapse to check_rst's bare,
+    Git-changed scope when [rst].dir is absent."""
 
     def fake_run(cmd: list[str], cwd: Path) -> int:
-        captured["cmd"] = cmd
-        return 0
+        raise AssertionError("invalid full-scan configuration must stop before check_rst")
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/check_rst")
 
     ok = check_formatting._check_rst(tmp_path, explicit_files=None)
 
-    assert ok is True
-    assert captured["cmd"] == ["/usr/bin/check_rst"]
+    assert ok is False
 
 
 def test_check_rst_selected_file_fails_when_backend_is_missing(

@@ -126,6 +126,7 @@ def test_valid_config_loads_correctly(tmp_path: Path) -> None:
     assert config.cpp_globs == ["src/**/*.cpp", "src/**/*.hpp"]
     assert config.web_globs == ["www/**/*.html", "www/**/*.css", "www/**/*.js", "docs/_static/*.js"]
     assert config.python_dirs == ["scripts", "tests"]
+    assert config.mypy_dirs == ["scripts", "tests"]
     assert config.json_files == [".prettierrc", "package.json"]
     assert config.ini_globs == ["build-configs/*.ini"]
     assert config.clang_tidy_build_dir == "/tmp/vscode-build/example-project"
@@ -149,6 +150,7 @@ def test_omitted_section_defaults_to_empty_not_an_error(tmp_path: Path) -> None:
     config = check_formatting._load_project_config(tmp_path)
     assert config.checks == ["python", "mypy", "rst"]
     assert config.python_dirs == ["bin", "tests"]
+    assert config.mypy_dirs == ["bin", "tests"]
     assert config.cpp_globs == []
     assert config.web_globs == []
     assert config.json_files == []
@@ -332,6 +334,20 @@ def test_check_mypy_uses_configured_dirs_matching_python(tmp_path: Path, monkeyp
     assert ok is True
     assert "source" in captured["cmd"]
     assert "spec" in captured["cmd"]
+
+
+def test_checker_kwargs_use_mypy_specific_dirs_when_configured(tmp_path: Path) -> None:
+    """Mypy may intentionally cover a narrower source set than Ruff."""
+    (tmp_path / ".check_formatting.toml").write_text(
+        'checks = ["python", "mypy"]\n\n'
+        '[python]\ndirs = ["bin", "tests"]\n\n'
+        '[mypy]\ndirs = ["bin/std.py", "tests"]\n'
+    )
+
+    config = check_formatting._load_project_config(tmp_path)
+
+    assert check_formatting._checker_kwargs("python", config) == {"dirs": ["bin", "tests"]}
+    assert check_formatting._checker_kwargs("mypy", config) == {"dirs": ["bin/std.py", "tests"]}
 
 
 def test_check_clang_tidy_uses_configured_build_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
