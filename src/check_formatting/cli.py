@@ -2464,8 +2464,7 @@ def _check_rst(
         rst_files, _ = result
 
     if explicit_files is None and not recursive_dir:
-        print("  ERROR: [rst].dir is required for an RST full scan (--all)")
-        return False
+        _config_error("[rst].dir is required when the rst checker is selected for a full scan (--all)")
 
     rst_tool = shutil.which("check_rst")
     if rst_tool is None:
