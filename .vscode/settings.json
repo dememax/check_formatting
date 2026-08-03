@@ -1,0 +1,64 @@
+// Copyright (C) 2026 Maxime P. DEMENTYEV
+// SPDX-License-Identifier: GPL-3.0-only
+// VS Code workspace defaults for check_formatting.
+{
+    "files.encoding": "utf8",
+    "files.eol": "\n",
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "editor.rulers": [120],
+
+    "python.defaultInterpreterPath": "/usr/bin/python3.14",
+    "python-envs.terminal.autoActivationType": "off",
+    "python.analysis.extraPaths": ["${workspaceFolder}/src"],
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": ["tests"],
+    "python.testing.cwd": "${workspaceFolder}",
+
+    // Ruff discovers pyproject.toml itself; make the repository configuration
+    // authoritative if an editor-level Ruff configuration also exists.
+    "ruff.configurationPreference": "filesystemFirst",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true
+    },
+
+    "restructuredtext": {
+        "preview.fontSize": 18,
+        "linter.run": "onSave",
+        "preview.autoShow": true,
+        "confPath": "docs/conf.py",
+        "sphinxBuildArgs": ["-n", "-v"],
+        "sphinxBuildPath": "/tmp/vscode-build/check_formatting"
+    },
+
+    "markdown": {
+        "preview.fontSize": 18,
+        "preview.scrollEditorWithPreview": true
+    },
+
+    "cSpell.words": [
+        "check_formatting",
+        "clang",
+        "cmake",
+        "DEMENTYEV",
+        "dememax",
+        "docname",
+        "kconfig",
+        "Maxime",
+        "mypy",
+        "prettier",
+        "pyproject",
+        "pytest",
+        "reStructuredText",
+        "ruff",
+        "shellcheck",
+        "SPDX",
+        "Sphinx",
+        "toctree",
+        "toml",
+        "venv",
+        "yaml"
+    ]
+}
