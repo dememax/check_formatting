@@ -1711,6 +1711,35 @@ def _check_web(
     return _run(["npx", "--no-install", "prettier", "--check", *globs], cwd=root) == 0
 
 
+def _resolve_python_targets(
+    explicit_files: list[pathlib.Path] | None,
+    root: pathlib.Path,
+    ignore_patterns: Sequence[str],
+    dirs: Sequence[str],
+    log: Callable[..., None],
+) -> tuple[list[str], str] | None:
+    """Resolve the Python file/dir targets shared by ``python`` (ruff) and ``mypy``:
+    explicit ``.py`` files intersected with configured *dirs*, or *dirs* themselves
+    when no files were named explicitly.
+
+    Returns ``None`` when explicit files were given but none survived extension or
+    configured-target filtering — the caller should log nothing further and return
+    True ("nothing to do") — otherwise ``(targets, targets_label)``.
+    """
+    if explicit_files is not None:
+        result = _select_explicit(explicit_files, root, ignore_patterns, extensions=frozenset({".py"}))
+        if result is None:
+            log("  (no Python files in selection)")
+            return None
+        py_files, excluded = result
+        py_files = _filter_configured_targets(py_files, root, dirs)
+        if not py_files:
+            log("  (no Python files in configured targets after exclusions)")
+            return None
+        return [str(f) for f in py_files], _file_count_label(len(py_files), excluded)
+    return list(dirs), f"({', '.join(dirs)})"
+
+
 def _check_python(
     root: pathlib.Path,
     fix: bool = False,
@@ -1739,21 +1768,10 @@ def _check_python(
     ``.formatting-ignore`` patterns are applied beforehand.
     """
     log = _make_log(quiet)
-    if explicit_files is not None:
-        result = _select_explicit(explicit_files, root, ignore_patterns, extensions=frozenset({".py"}))
-        if result is None:
-            log("  (no Python files in selection)")
-            return True
-        py_files, excluded = result
-        py_files = _filter_configured_targets(py_files, root, dirs)
-        if not py_files:
-            log("  (no Python files in configured targets after exclusions)")
-            return True
-        targets = [str(f) for f in py_files]
-        targets_label = _file_count_label(len(py_files), excluded)
-    else:
-        targets = list(dirs)
-        targets_label = f"({', '.join(targets)})"
+    result = _resolve_python_targets(explicit_files, root, ignore_patterns, dirs, log)
+    if result is None:
+        return True
+    targets, targets_label = result
     if fix:
         log(f"▶ ruff format  {targets_label}")
         fmt_rc = _run(["ruff", "format", *targets], cwd=root)
@@ -1780,6 +1798,49 @@ def _check_python(
         log(f"▶ ruff check  {targets_label}")
         lint_rc = _run(["ruff", "check", *targets], cwd=root)
     return fmt_rc == 0 and lint_rc == 0
+
+
+def _dispatch_prettier_checker(
+    files: list[pathlib.Path],
+    root: pathlib.Path,
+    *,
+    fix: bool,
+    diff: bool,
+    verbose: bool,
+    git_auto_detected: bool,
+    label: str,
+    log: Callable[..., None],
+) -> bool:
+    """Run prettier's check/verbose/diff/fix dispatch shared by the checkers whose
+    files are always a concrete, already-resolved list regardless of *explicit_files*
+    (``json``, ``ini``, ``yaml``) — once each has run its own file-selection
+    prologue and produced *files*/*label*.
+
+    ``web`` is not one of these callers: unlike json/ini/yaml, its check/verbose
+    modes without explicit files invoke prettier on the configured *globs*
+    directly (a single batched command, not a resolved file list), so it keeps
+    its own dispatch tail instead of sharing this one.
+    """
+    if fix:
+        return _fix_prettier_files(files, root, git_auto_detected=git_auto_detected, label=label, log=log)
+    if diff:
+        if git_auto_detected:
+            log(f"▶ npx prettier (diff, git-scoped)  {label}")
+            return _report_prettier_files_git_scoped(files, root, show_diff=True, log=log)
+        log(f"▶ npx prettier (diff)  {label}")
+        return _prettier_diff(files, root)
+    if git_auto_detected:
+        if verbose:
+            _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+        log(f"▶ npx prettier --check (git-scoped)  {label}")
+        return _report_prettier_files_git_scoped(files, root, show_diff=False, log=log)
+    str_files = [str(f) for f in files]
+    if verbose:
+        _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+        log(f"▶ npx prettier --check --log-level log  {label}")
+        return _run(["npx", "--no-install", "prettier", "--check", "--log-level", "log", *str_files], cwd=root) == 0
+    log(f"▶ npx prettier --check  {label}")
+    return _run(["npx", "--no-install", "prettier", "--check", *str_files], cwd=root) == 0
 
 
 # All JSON / JSONC files in the project (listed explicitly; not a glob).
@@ -1855,32 +1916,16 @@ def _check_json(
     if _report_empty_selection(matched_files, excluded, log, "JSON"):
         return True
     label = _file_count_label(len(matched_files), excluded)
-    str_files = [str(f) for f in matched_files]
-    if fix:
-        return _fix_prettier_files(
-            matched_files,
-            root,
-            git_auto_detected=git_auto_detected,
-            label=label,
-            log=log,
-        )
-    if diff:
-        if git_auto_detected:
-            log(f"▶ npx prettier (diff, git-scoped)  {label}")
-            return _report_prettier_files_git_scoped(matched_files, root, show_diff=True, log=log)
-        log(f"▶ npx prettier (diff)  {label}")
-        return _prettier_diff(matched_files, root)
-    if git_auto_detected:
-        if verbose:
-            _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
-        log(f"▶ npx prettier --check (git-scoped)  {label}")
-        return _report_prettier_files_git_scoped(matched_files, root, show_diff=False, log=log)
-    if verbose:
-        _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
-        log(f"▶ npx prettier --check --log-level log  {label}")
-        return _run(["npx", "--no-install", "prettier", "--check", "--log-level", "log", *str_files], cwd=root) == 0
-    log(f"▶ npx prettier --check  {label}")
-    return _run(["npx", "--no-install", "prettier", "--check", *str_files], cwd=root) == 0
+    return _dispatch_prettier_checker(
+        matched_files,
+        root,
+        fix=fix,
+        diff=diff,
+        verbose=verbose,
+        git_auto_detected=git_auto_detected,
+        label=label,
+        log=log,
+    )
 
 
 def _check_ini(
@@ -1942,32 +1987,16 @@ def _check_ini(
     if _report_empty_selection(files, excluded, log, "INI"):
         return True
     label = _file_count_label(len(files), excluded)
-    str_files = [str(f) for f in files]
-    if fix:
-        return _fix_prettier_files(
-            files,
-            root,
-            git_auto_detected=git_auto_detected,
-            label=label,
-            log=log,
-        )
-    if diff:
-        if git_auto_detected:
-            log(f"▶ npx prettier (diff, git-scoped)  {label}")
-            return _report_prettier_files_git_scoped(files, root, show_diff=True, log=log)
-        log(f"▶ npx prettier (diff)  {label}")
-        return _prettier_diff(files, root)
-    if git_auto_detected:
-        if verbose:
-            _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
-        log(f"▶ npx prettier --check (git-scoped)  {label}")
-        return _report_prettier_files_git_scoped(files, root, show_diff=False, log=log)
-    if verbose:
-        _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
-        log(f"▶ npx prettier --check --log-level log  {label}")
-        return _run(["npx", "--no-install", "prettier", "--check", "--log-level", "log", *str_files], cwd=root) == 0
-    log(f"▶ npx prettier --check  {label}")
-    return _run(["npx", "--no-install", "prettier", "--check", *str_files], cwd=root) == 0
+    return _dispatch_prettier_checker(
+        files,
+        root,
+        fix=fix,
+        diff=diff,
+        verbose=verbose,
+        git_auto_detected=git_auto_detected,
+        label=label,
+        log=log,
+    )
 
 
 def _check_yaml(
@@ -2026,32 +2055,16 @@ def _check_yaml(
     if _report_empty_selection(files, excluded, log, "YAML"):
         return True
     label = _file_count_label(len(files), excluded)
-    str_files = [str(f) for f in files]
-    if fix:
-        return _fix_prettier_files(
-            files,
-            root,
-            git_auto_detected=git_auto_detected,
-            label=label,
-            log=log,
-        )
-    if diff:
-        if git_auto_detected:
-            log(f"▶ npx prettier (diff, git-scoped)  {label}")
-            return _report_prettier_files_git_scoped(files, root, show_diff=True, log=log)
-        log(f"▶ npx prettier (diff)  {label}")
-        return _prettier_diff(files, root)
-    if git_auto_detected:
-        if verbose:
-            _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
-        log(f"▶ npx prettier --check (git-scoped)  {label}")
-        return _report_prettier_files_git_scoped(files, root, show_diff=False, log=log)
-    if verbose:
-        _print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
-        log(f"▶ npx prettier --check --log-level log  {label}")
-        return _run(["npx", "--no-install", "prettier", "--check", "--log-level", "log", *str_files], cwd=root) == 0
-    log(f"▶ npx prettier --check  {label}")
-    return _run(["npx", "--no-install", "prettier", "--check", *str_files], cwd=root) == 0
+    return _dispatch_prettier_checker(
+        files,
+        root,
+        fix=fix,
+        diff=diff,
+        verbose=verbose,
+        git_auto_detected=git_auto_detected,
+        label=label,
+        log=log,
+    )
 
 
 def _check_mypy(
@@ -2079,21 +2092,10 @@ def _check_mypy(
     ``pyproject.toml``.
     """
     log = _make_log(quiet)
-    if explicit_files is not None:
-        result = _select_explicit(explicit_files, root, ignore_patterns, extensions=frozenset({".py"}))
-        if result is None:
-            log("  (no Python files in selection)")
-            return True
-        py_files, excluded = result
-        py_files = _filter_configured_targets(py_files, root, dirs)
-        if not py_files:
-            log("  (no Python files in configured targets after exclusions)")
-            return True
-        targets = [str(f) for f in py_files]
-        targets_label = _file_count_label(len(py_files), excluded)
-    else:
-        targets = list(dirs)
-        targets_label = f"({', '.join(targets)})"
+    result = _resolve_python_targets(explicit_files, root, ignore_patterns, dirs, log)
+    if result is None:
+        return True
+    targets, targets_label = result
     if fix:
         log("  (mypy has no fix mode — running type-check)")
     elif diff:
