@@ -741,6 +741,33 @@ def _show_diff(original: str, formatted: str, label: str) -> bool:
     return True
 
 
+def _diff_files_by_command(
+    files: Sequence[pathlib.Path],
+    root: pathlib.Path,
+    tool_name: str,
+    cmd_for_file: Callable[[pathlib.Path], list[str]],
+) -> bool:
+    """Run ``cmd_for_file(f)`` per file (stdout) and show a unified diff for each
+    violation. Shared by every checker whose diff mode is "reformat to stdout,
+    diff against the original" — clang-format, cmake-format, and (via
+    :func:`_prettier_diff`) prettier's four checkers.
+
+    Returns True if no file would change, False on a violation or a *tool_name*
+    invocation failure (exit 127 — command not found).
+    """
+    any_violation = False
+    for f in files:
+        rc, formatted = _fmt_stdout(cmd_for_file(f), cwd=root)
+        if rc == 127:
+            return False
+        if rc != 0:
+            print(f"ERROR: {tool_name} exited {rc} on {f.name}")
+            return False
+        if _show_diff(f.read_text(encoding="utf-8"), formatted, str(f.relative_to(root))):
+            any_violation = True
+    return not any_violation
+
+
 def _prettier_diff(files: list[pathlib.Path], root: pathlib.Path) -> bool:
     """Run prettier per-file and show a unified diff for each violation.
 
@@ -748,17 +775,7 @@ def _prettier_diff(files: list[pathlib.Path], root: pathlib.Path) -> bool:
     Returns True if no file would change, False on a violation or a
     prettier invocation failure.
     """
-    any_violation = False
-    for f in files:
-        rc, formatted = _fmt_stdout(["npx", "--no-install", "prettier", str(f)], cwd=root)
-        if rc == 127:
-            return False
-        if rc != 0:
-            print(f"ERROR: prettier exited {rc} on {f.name}")
-            return False
-        if _show_diff(f.read_text(encoding="utf-8"), formatted, str(f.relative_to(root))):
-            any_violation = True
-    return not any_violation
+    return _diff_files_by_command(files, root, "prettier", lambda f: ["npx", "--no-install", "prettier", str(f)])
 
 
 def _load_ignore_patterns(root: pathlib.Path, filename: str = IGNORE_FILE) -> list[str]:
@@ -1411,18 +1428,12 @@ def _check_cpp(
         return _run(["clang-format", "-i"] + [str(f) for f in files], cwd=root) == 0
     if diff:
         log(f"▶ clang-format (diff{', git-scoped' if git_auto_detected else ''})  {label}")
-        any_violation = False
-        for f in files:
-            lines_flags = _lines_flags(root, f) if git_auto_detected else []
-            rc, formatted = _fmt_stdout(["clang-format", *lines_flags, str(f)], cwd=root)
-            if rc == 127:
-                return False
-            if rc != 0:
-                print(f"ERROR: clang-format exited {rc} on {f.name}")
-                return False
-            if _show_diff(f.read_text(encoding="utf-8"), formatted, str(f.relative_to(root))):
-                any_violation = True
-        return not any_violation
+        return _diff_files_by_command(
+            files,
+            root,
+            "clang-format",
+            lambda f: ["clang-format", *(_lines_flags(root, f) if git_auto_detected else []), str(f)],
+        )
     # check and verbose: clang-format exposes no extra diagnostic flags
     if verbose:
         _print_tool_info("clang-format", cwd=root)
@@ -1489,17 +1500,7 @@ def _check_cmake(
         return _run([cmake_bin, "--in-place"] + [str(f) for f in files], cwd=root) == 0
     if diff:
         log(f"▶ cmake-format (diff)  {label}")
-        any_violation = False
-        for f in files:
-            rc, formatted = _fmt_stdout([cmake_bin, str(f)], cwd=root)
-            if rc == 127:
-                return False
-            if rc != 0:
-                print(f"ERROR: cmake-format exited {rc} on {f.name}")
-                return False
-            if _show_diff(f.read_text(encoding="utf-8"), formatted, str(f.relative_to(root))):
-                any_violation = True
-        return not any_violation
+        return _diff_files_by_command(files, root, "cmake-format", lambda f: [cmake_bin, str(f)])
     # check and verbose: cmake-format exposes no extra diagnostic flags
     if verbose:
         _print_tool_info(cmake_bin, cwd=root)
