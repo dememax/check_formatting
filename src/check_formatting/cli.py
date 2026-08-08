@@ -941,6 +941,23 @@ def _is_git_auto_detected_scope(file_args: Sequence[str], all_files: bool) -> bo
     return not all_files and not file_args
 
 
+def _bare_scoped(explicit_files: list[pathlib.Path] | None, git_auto_detected: bool) -> bool:
+    """True only for the actual bare/hunk-scoped rst case: an auto-detected file
+    list, not just *git_auto_detected* on its own.
+
+    *git_auto_detected* is meaningful only when *explicit_files* is an actual
+    file list — the CLI never produces ``explicit_files=None`` (a full/
+    recursive scan) together with ``git_auto_detected=True``
+    (:func:`_is_git_auto_detected_scope` ties the two together), but the
+    public :func:`check_formatting` API doesn't enforce that pairing for a
+    direct library caller. Used by both :func:`_check_rst` (to choose
+    ``fix --fast`` vs. ordinary ``fix``) and :func:`check_formatting`'s own
+    remediation-hint call site, so the guard is defined once instead of
+    independently re-derived in two places.
+    """
+    return explicit_files is not None and git_auto_detected
+
+
 def _resolve_under(path_str: str, root: pathlib.Path) -> pathlib.Path:
     """Resolve *path_str* to an absolute path, anchoring relative paths at *root*.
 
@@ -2480,13 +2497,8 @@ def _check_rst(
         label = f"(recursive: {recursive_dir})"
         base = [rst_tool, "--recursive", recursive_dir]
 
-    # Bare/hunk-scoped only applies to the auto-detected-files scope (see docstring's
-    # three scopes above) — *not* just because git_auto_detected happened to be True,
-    # which a full-scan caller (explicit_files=None) could pass in error.
-    bare_scoped = explicit_files is not None and git_auto_detected
-
     if fix:
-        verb = ["fix", "--fast"] if bare_scoped else ["fix"]
+        verb = ["fix", "--fast"] if _bare_scoped(explicit_files, git_auto_detected) else ["fix"]
         log(f"▶ check_rst {' '.join(verb)}  {label}")
         return _run([base[0], *verb, *base[1:]], cwd=root) == 0
     if diff:
@@ -2842,9 +2854,7 @@ def check_formatting(
                 print("FORMATTING: violations found — see diff above. To fix, run:")
             else:
                 print("FORMATTING: violations found. To fix, run:")
-            # Same guard as _check_rst's own bare_scoped: git_auto_detected only means
-            # anything for an actual file selection, not a full scan (explicit_files=None).
-            hint_git_auto_detected = git_auto_detected and explicit_files is not None
+            hint_git_auto_detected = _bare_scoped(explicit_files, git_auto_detected)
             for name in checks:
                 if not results.get(name, True):
                     print(f"    {_fix_command(name, config, git_auto_detected=hint_git_auto_detected)}")
