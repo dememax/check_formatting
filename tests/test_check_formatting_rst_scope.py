@@ -120,6 +120,31 @@ def test_check_rst_full_scan_uses_recursive_configured_dir(tmp_path: Path, monke
     assert captured["cmd"] == ["/usr/bin/check_rst", "check", "--recursive", "docs"]
 
 
+def test_check_rst_full_scan_ignores_stray_git_auto_detected_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """git_auto_detected=True must not, by itself, select the unvalidated `fix --fast`
+    mutation-only path for a full scan (explicit_files=None) — that combination isn't
+    reachable from the CLI (_is_git_auto_detected_scope ties the two together), but a
+    direct library caller could still pass it, and a full-repo scan must always get the
+    fully-validated `fix`, never a silently weaker mutation-only pass."""
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd: list[str], cwd: Path) -> int:
+        captured["cmd"] = cmd
+        return 0
+
+    monkeypatch.setattr(check_formatting, "_run", fake_run)
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/check_rst")
+
+    ok = check_formatting._check_rst(
+        tmp_path, fix=True, explicit_files=None, recursive_dir="docs", git_auto_detected=True
+    )
+
+    assert ok is True
+    assert captured["cmd"] == ["/usr/bin/check_rst", "fix", "--recursive", "docs"]
+
+
 def test_check_rst_full_scan_without_configured_dir_fails_clearly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -174,3 +199,24 @@ def test_rst_fix_hint_matches_effective_scope(tmp_path: Path) -> None:
 
     assert check_formatting._fix_command("rst", config, git_auto_detected=True) == "check_rst fix --fast"
     assert check_formatting._fix_command("rst", config, git_auto_detected=False) == "check_rst fix"
+
+
+def test_check_formatting_full_scan_hint_ignores_stray_git_auto_detected_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Same misuse as _check_rst's own full-scan test, at the report layer: a
+    full-repo scan (explicit_files=None) that also carries a stray
+    git_auto_detected=True must still print the fully-validated `check_rst fix`
+    remediation hint, not the unvalidated `--fast` one — printing `--fast` here
+    would tell a release-gate caller to re-run a mutation-only pass instead of
+    the full validation the failure actually needs."""
+    (tmp_path / ".check_formatting.toml").write_text('checks = ["rst"]\n\n[rst]\ndir = "docs"\n')
+    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 1)
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/check_rst")
+
+    ok = check_formatting.check_formatting(tmp_path, explicit_files=None, git_auto_detected=True)
+
+    assert ok is False
+    out = capsys.readouterr().out
+    assert "check_rst fix --fast" not in out
+    assert "check_rst fix" in out
