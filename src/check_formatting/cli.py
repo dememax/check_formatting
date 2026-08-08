@@ -668,6 +668,19 @@ def _fmt_stdout(cmd: list[str], cwd: pathlib.Path, *, input_text: str | None = N
     return result.returncode, result.stdout
 
 
+def _run_capture_merged(cmd: list[str], cwd: pathlib.Path) -> subprocess.CompletedProcess[str]:
+    """Run *cmd* capturing merged stdout+stderr as one stream, not streamed live
+    to the terminal like :func:`_run`, and not kept separate like
+    :func:`_fmt_stdout` — used where output must be scanned/filtered
+    line-by-line before any of it is shown (the kconfig checker's per-combo
+    warning-count scan over west/CMake's combined output). Raises
+    ``FileNotFoundError`` the same way ``subprocess.run`` itself does; callers
+    that need a missing-binary message of their own catch it directly, the
+    same convention :func:`_run`/:func:`_fmt_stdout` each use internally.
+    """
+    return subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+
 def _print_tool_info(
     binary: str | pathlib.Path,
     cwd: pathlib.Path,
@@ -2315,9 +2328,7 @@ def _check_kconfig(
             all_ok = all_ok and (_run(cmd, cwd=root) == 0)
             continue
         try:
-            result = subprocess.run(
-                cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8"
-            )
+            result = _run_capture_merged(cmd, cwd=root)
         except FileNotFoundError:
             print(f"ERROR: could not execute {west_bin}")
             return False
