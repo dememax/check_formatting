@@ -416,6 +416,7 @@ import sys
 import tempfile
 import tomllib
 from collections.abc import Callable, Sequence
+from typing import NoReturn
 
 # Name of the per-project ignore file (lives at the repository root).
 IGNORE_FILE = ".formatting-ignore"
@@ -466,7 +467,7 @@ class ProjectConfig:
     rst_dir: str
 
 
-def _config_error(message: str) -> None:
+def _config_error(message: str) -> NoReturn:
     print(f"check_formatting: {message}")
     sys.exit(1)
 
@@ -475,14 +476,14 @@ def _require_str_list(table: dict[str, object], key: str, where: str) -> list[st
     value = table.get(key)
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
         _config_error(f"{where}: {key!r} must be a list of strings, got {value!r}")
-    return value  # type: ignore[return-value]
+    return value
 
 
 def _require_str(table: dict[str, object], key: str, where: str) -> str:
     value = table.get(key)
     if not isinstance(value, str):
         _config_error(f"{where}: {key!r} must be a string, got {value!r}")
-    return value  # type: ignore[return-value]
+    return value
 
 
 def _load_project_config(root: pathlib.Path) -> ProjectConfig:
@@ -587,10 +588,9 @@ def _require_build_combos(table: dict[str, object], key: str, where: str) -> lis
         _config_error(f"{where}: {key!r} must be a list of tables, got {value!r}")
     combos: list[dict[str, object]] = []
     item: object
-    for i, item in enumerate(value):  # type: ignore[arg-type]
+    for i, item in enumerate(value):
         if not isinstance(item, dict):
             _config_error(f"{where}: {key!r}[{i}] must be a table, got {item!r}")
-            continue
         label: object = item.get("label")
         if not isinstance(label, str):
             _config_error(f"{where}: {key!r}[{i}].label must be a string, got {label!r}")
@@ -605,7 +605,7 @@ def _require_table(data: dict[str, object], section: str) -> dict[str, object]:
     table = data[section]
     if not isinstance(table, dict):
         _config_error(f"[{section}] must be a table, got {table!r}")
-    return table  # type: ignore[return-value]
+    return table
 
 
 def _echo_project_config(source: str, config: ProjectConfig) -> None:
@@ -1040,6 +1040,31 @@ def _file_count_label(total: int, excluded: int) -> str:
     return f"({total} file(s))"
 
 
+def _report_empty_selection(
+    files: Sequence[pathlib.Path],
+    excluded: int,
+    log: Callable[..., None],
+    noun: str,
+    *,
+    ignore_file: str = IGNORE_FILE,
+) -> bool:
+    """Log and return True ("nothing to do") when *files* is empty; False to continue.
+
+    Every ``_check_*`` backend selects its files, then faces the same two empty
+    outcomes: nothing of this *noun* exists at all, or everything that does was
+    excluded by *ignore_file*. Centralizing the pair also fixes a copy-paste
+    drift a few call sites had: some previously dropped *excluded* from the
+    "all ... excluded" message.
+    """
+    if not files and not excluded:
+        log(f"  (no {noun} files found)")
+        return True
+    if not files:
+        log(f"  (all {excluded} {noun} file(s) excluded by {ignore_file})")
+        return True
+    return False
+
+
 def _select_explicit(
     explicit_files: list[pathlib.Path],
     root: pathlib.Path,
@@ -1350,11 +1375,7 @@ def _check_cpp(
     else:
         all_files = [f for g in globs for f in sorted(root.glob(g))]
         files, excluded = _filter_files(all_files, root, ignore_patterns)
-    if not files and not excluded:
-        log("  (no C++ files found)")
-        return True
-    if not files:
-        log(f"  (all {excluded} C++ file(s) excluded by {IGNORE_FILE})")
+    if _report_empty_selection(files, excluded, log, "C++"):
         return True
     label = _file_count_label(len(files), excluded)
 
@@ -1436,11 +1457,7 @@ def _check_cmake(
     else:
         all_files = sorted(root.glob("**/CMakeLists.txt"))
         files, excluded = _filter_files(all_files, root, ignore_patterns)
-    if not files and not excluded:
-        log("  (no CMakeLists.txt files found)")
-        return True
-    if not files:
-        log(f"  (all {excluded} CMakeLists.txt file(s) excluded by {IGNORE_FILE})")
+    if _report_empty_selection(files, excluded, log, "CMakeLists.txt"):
         return True
     label = _file_count_label(len(files), excluded)
     cmake_bin = shutil.which("cmake-format")
@@ -1510,11 +1527,7 @@ def _check_meson(
         else:
             all_build_files = sorted(root.rglob("meson.build")) + sorted(root.rglob("meson.options"))
             build_files, excluded = _filter_files(all_build_files, root, ignore_patterns)
-        if not build_files and not excluded:
-            log("  (no Meson build files found)")
-            return True
-        if not build_files:
-            log(f"  (all Meson build files excluded by {IGNORE_FILE})")
+        if _report_empty_selection(build_files, excluded, log, "Meson build"):
             return True
     if fix:
         label = _file_count_label(len(build_files), excluded)
@@ -1582,9 +1595,6 @@ def _check_meson(
 # Glob patterns covering every web file passed to prettier (HTML/CSS/JS).
 # Used for both file-system discovery (root.glob) and as CLI arguments.
 _WEB_GLOBS: tuple[str, ...] = ()
-
-# Pre-built quoted string for display in print statements and _FIX_COMMANDS.
-_WEB_GLOBS_DISPLAY = " ".join(f'"{g}"' for g in _WEB_GLOBS)
 
 
 def _check_web(
@@ -1661,11 +1671,7 @@ def _check_web(
         else:
             all_web_files = [f for g in globs for f in sorted(root.glob(g))]
             web_files, excluded = _filter_files(all_web_files, root, ignore_patterns)
-        if not web_files and not excluded:
-            log("  (no web files found)")
-            return True
-        if not web_files:
-            log(f"  (all web files excluded by {IGNORE_FILE})")
+        if _report_empty_selection(web_files, excluded, log, "web"):
             return True
     if fix:
         label = _file_count_label(len(web_files), excluded)
@@ -1846,11 +1852,7 @@ def _check_json(
     else:
         all_files = [root / p for p in files if (root / p).exists()]
         matched_files, excluded = _filter_files(all_files, root, ignore_patterns)
-    if not matched_files and not excluded:
-        log("  (no JSON files found)")
-        return True
-    if not matched_files:
-        log(f"  (all JSON files excluded by {IGNORE_FILE})")
+    if _report_empty_selection(matched_files, excluded, log, "JSON"):
         return True
     label = _file_count_label(len(matched_files), excluded)
     str_files = [str(f) for f in matched_files]
@@ -1937,11 +1939,7 @@ def _check_ini(
     else:
         all_files = [f for g in globs for f in sorted(root.glob(g))]
         files, excluded = _filter_files(all_files, root, ignore_patterns)
-    if not files and not excluded:
-        log("  (no INI files found)")
-        return True
-    if not files:
-        log(f"  (all INI files excluded by {IGNORE_FILE})")
+    if _report_empty_selection(files, excluded, log, "INI"):
         return True
     label = _file_count_label(len(files), excluded)
     str_files = [str(f) for f in files]
@@ -2025,11 +2023,7 @@ def _check_yaml(
     else:
         all_files = [f for g in globs for f in sorted(root.glob(g))]
         files, excluded = _filter_files(all_files, root, ignore_patterns)
-    if not files and not excluded:
-        log("  (no YAML files found)")
-        return True
-    if not files:
-        log(f"  (all {excluded} YAML file(s) excluded by {IGNORE_FILE})")
+    if _report_empty_selection(files, excluded, log, "YAML"):
         return True
     label = _file_count_label(len(files), excluded)
     str_files = [str(f) for f in files]
@@ -2197,11 +2191,7 @@ def _check_clang_tidy(
         all_files = sorted(f for g in cpp_globs for f in root.glob(g) if f.suffix == ".cpp")
         files, excluded = _filter_files(all_files, root, clang_tidy_patterns)
 
-    if not files and not excluded:
-        log("  (no .cpp files found)")
-        return True
-    if not files:
-        log(f"  (all {excluded} .cpp file(s) excluded by {IGNORE_FILE} / {CLANG_TIDY_IGNORE_FILE})")
+    if _report_empty_selection(files, excluded, log, ".cpp", ignore_file=f"{IGNORE_FILE} / {CLANG_TIDY_IGNORE_FILE}"):
         return True
 
     label = _file_count_label(len(files), excluded)
@@ -2379,11 +2369,7 @@ def _check_shell(
     else:
         all_files = [f for g in globs for f in sorted(root.glob(g))]
         files, excluded = _filter_files(all_files, root, ignore_patterns)
-    if not files and not excluded:
-        log("  (no shell files found)")
-        return True
-    if not files:
-        log(f"  (all {excluded} shell file(s) excluded by {IGNORE_FILE})")
+    if _report_empty_selection(files, excluded, log, "shell"):
         return True
     label = _file_count_label(len(files), excluded)
     if fix:
@@ -2493,12 +2479,12 @@ def _check_rst(
         else:
             label = _file_count_label(len(rst_files), 0)
             base = [rst_tool, *[str(f) for f in rst_files]]
-    elif recursive_dir:
+    else:
+        # explicit_files is None implies recursive_dir here: the guard above
+        # (_config_error on "explicit_files is None and not recursive_dir") already
+        # exited otherwise.
         label = f"(recursive: {recursive_dir})"
         base = [rst_tool, "--recursive", recursive_dir]
-    else:
-        label = "(git-changed RST)"
-        base = [rst_tool]
 
     # Bare/hunk-scoped only applies to the auto-detected-files scope (see docstring's
     # three scopes above) — *not* just because git_auto_detected happened to be True,
