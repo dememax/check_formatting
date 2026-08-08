@@ -524,21 +524,23 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
 
     checks = _require_str_list(data, "checks", _CONFIG_FILE)
     _validate_check_names(checks, _CONFIG_FILE)
-    python_dirs = _optional_section_str_list(data, "python", "dirs")
-    mypy_dirs = _optional_section_str_list(data, "mypy", "dirs") if "mypy" in data else python_dirs
+    python_dirs: list[str] = _optional_section(data, "python", "dirs", _require_str_list, [])
+    mypy_dirs: list[str] = (
+        _optional_section(data, "mypy", "dirs", _require_str_list, []) if "mypy" in data else python_dirs
+    )
     return ProjectConfig(
         checks=checks,
-        cpp_globs=_optional_section_str_list(data, "cpp", "globs"),
-        web_globs=_optional_section_str_list(data, "web", "globs"),
+        cpp_globs=_optional_section(data, "cpp", "globs", _require_str_list, []),
+        web_globs=_optional_section(data, "web", "globs", _require_str_list, []),
         python_dirs=python_dirs,
         mypy_dirs=mypy_dirs,
-        json_files=_optional_section_str_list(data, "json", "files"),
-        ini_globs=_optional_section_str_list(data, "ini", "globs"),
-        clang_tidy_build_dir=_optional_section_str(data, "clang_tidy", "build_dir"),
-        kconfig_build_combos=_optional_section_build_combos(data, "kconfig", "build_combos"),
-        shell_globs=_optional_section_str_list(data, "shell", "globs"),
-        yaml_globs=_optional_section_str_list(data, "yaml", "globs"),
-        rst_dir=_optional_section_str(data, "rst", "dir"),
+        json_files=_optional_section(data, "json", "files", _require_str_list, []),
+        ini_globs=_optional_section(data, "ini", "globs", _require_str_list, []),
+        clang_tidy_build_dir=_optional_section(data, "clang_tidy", "build_dir", _require_str, ""),
+        kconfig_build_combos=_optional_section(data, "kconfig", "build_combos", _require_build_combos, []),
+        shell_globs=_optional_section(data, "shell", "globs", _require_str_list, []),
+        yaml_globs=_optional_section(data, "yaml", "globs", _require_str_list, []),
+        rst_dir=_optional_section(data, "rst", "dir", _require_str, ""),
     )
 
 
@@ -549,37 +551,27 @@ def _validate_check_names(checks: Sequence[str], where: str) -> None:
         _config_error(f"{where}: unknown checker(s): {', '.join(unknown)}")
 
 
-def _optional_section_str_list(data: dict[str, object], section: str, key: str) -> list[str]:
-    """Return ``data[section][key]`` as a validated string list, or ``[]`` if *section* is absent.
+def _optional_section[T](
+    data: dict[str, object],
+    section: str,
+    key: str,
+    validator: Callable[[dict[str, object], str, str], T],
+    default: T,
+) -> T:
+    """Return ``validator(data[section], key, ...)``, or *default* if *section* is absent.
 
     A project with no targets for this checker simply omits the section —
     that is not an error. If the section IS present, its keys are still fully
-    validated (missing or wrong-typed values are still a hard error —
-    declaring the section means declaring it correctly).
+    validated by *validator* (missing or wrong-typed values are still a hard
+    error — declaring the section means declaring it correctly). Shared by
+    every optional per-checker config field: plain string lists and single
+    strings (:func:`_require_str_list`/:func:`_require_str`) alike with
+    kconfig's build-combo tables (:func:`_require_build_combos`), which
+    otherwise needed their own copy of this same "absent section" check.
     """
     if section not in data:
-        return []
-    return _require_str_list(_require_table(data, section), key, f"[{section}]")
-
-
-def _optional_section_str(data: dict[str, object], section: str, key: str) -> str:
-    """Return ``data[section][key]`` as a validated string, or ``""`` if *section* is absent."""
-    if section not in data:
-        return ""
-    return _require_str(_require_table(data, section), key, f"[{section}]")
-
-
-def _optional_section_build_combos(data: dict[str, object], section: str, key: str) -> list[dict[str, object]]:
-    """Return ``data[section][key]`` as a validated build-combo list, or ``[]`` if *section* is absent.
-
-    Each combo is a table with ``label`` (str) and ``args`` (list of str) —
-    a project-specific `west build` invocation, e.g. for the ``kconfig``
-    checker. Unlike the flat string lists used elsewhere, this is a list of
-    tables, so it gets its own validator.
-    """
-    if section not in data:
-        return []
-    return _require_build_combos(_require_table(data, section), key, f"[{section}]")
+        return default
+    return validator(_require_table(data, section), key, f"[{section}]")
 
 
 def _require_build_combos(table: dict[str, object], key: str, where: str) -> list[dict[str, object]]:
