@@ -713,6 +713,17 @@ def _make_log(quiet: bool) -> Callable[..., None]:
     return log
 
 
+def _log_analysis_only(tool: str, verb: str, fix: bool, diff: bool, log: Callable[..., None]) -> None:
+    """Log the "no fix/diff mode of its own" notice shared by every report-only
+    checker (mypy, clang-tidy, kconfig, shell): asked to fix or diff, each just
+    re-runs its own analysis (*verb*) instead.
+    """
+    if fix:
+        log(f"  ({tool} has no fix mode — running {verb})")
+    elif diff:
+        log(f"  ({tool} has no diff mode — running {verb})")
+
+
 def _show_diff(original: str, formatted: str, label: str) -> bool:
     """Print a unified diff of *original* vs *formatted*; return True if they differ."""
     if original == formatted:
@@ -2105,10 +2116,7 @@ def _check_mypy(
     if result is None:
         return True
     targets, targets_label = result
-    if fix:
-        log("  (mypy has no fix mode — running type-check)")
-    elif diff:
-        log("  (mypy has no diff mode — running type-check)")
+    _log_analysis_only("mypy", "type-check", fix, diff, log)
     # Wiped unconditionally: mypy is resolved from PATH, so a machine running
     # a different mypy version than whatever last wrote this
     # cache could silently produce wrong (missing or spurious) results if the
@@ -2175,10 +2183,7 @@ def _check_clang_tidy(
         log("  (no [clang_tidy].build_dir configured)")
         return True
 
-    if fix:
-        log("  (clang-tidy has no fix mode — running analysis)")
-    elif diff:
-        log("  (clang-tidy has no diff mode — running analysis)")
+    _log_analysis_only("clang-tidy", "analysis", fix, diff, log)
 
     clang_tidy_patterns = list(ignore_patterns) + _load_ignore_patterns(root, filename=CLANG_TIDY_IGNORE_FILE)
 
@@ -2278,10 +2283,7 @@ def _check_kconfig(
         log("  (no [kconfig].build_combos configured)")
         return True
 
-    if fix:
-        log("  (Kconfig has no fix mode — running validation)")
-    elif diff:
-        log("  (Kconfig has no diff mode — running validation)")
+    _log_analysis_only("Kconfig", "validation", fix, diff, log)
 
     west_bin = shutil.which("west")
     if west_bin is None:
@@ -2383,10 +2385,7 @@ def _check_shell(
     if _report_empty_selection(files, excluded, log, "shell"):
         return True
     label = _file_count_label(len(files), excluded)
-    if fix:
-        log("  (shellcheck has no fix mode — running lint)")
-    elif diff:
-        log("  (shellcheck has no diff mode — running lint)")
+    _log_analysis_only("shellcheck", "lint", fix, diff, log)
     shellcheck_bin = shutil.which("shellcheck")
     if shellcheck_bin is None:
         print("  ERROR: shellcheck not found — install it via the system package manager (e.g. apt install shellcheck)")
