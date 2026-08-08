@@ -2500,19 +2500,23 @@ def _check_rst(
         label = "(git-changed RST)"
         base = [rst_tool]
 
+    # Bare/hunk-scoped only applies to the auto-detected-files scope (see docstring's
+    # three scopes above) — *not* just because git_auto_detected happened to be True,
+    # which a full-scan caller (explicit_files=None) could pass in error.
+    bare_scoped = explicit_files is not None and git_auto_detected
+
     if fix:
-        verb = ["fix", "--fast"] if git_auto_detected else ["fix"]
+        verb = ["fix", "--fast"] if bare_scoped else ["fix"]
         log(f"▶ check_rst {' '.join(verb)}  {label}")
         return _run([base[0], *verb, *base[1:]], cwd=root) == 0
     if diff:
         log(f"▶ check_rst diff --fast  {label}")
         return _run([base[0], "diff", "--fast", *base[1:]], cwd=root) == 0
-    cmd = [base[0], "check", *base[1:]]
+    verb = ["check", "--verbose"] if verbose else ["check"]
     if verbose:
         log(f"  {rst_tool}")
-        cmd = [base[0], "check", "--verbose", *base[1:]]
     log(f"▶ check_rst check  {label}")
-    return _run(cmd, cwd=root) == 0
+    return _run([base[0], *verb, *base[1:]], cwd=root) == 0
 
 
 _CheckFn = Callable[..., bool]
@@ -2870,9 +2874,12 @@ def check_formatting(
                 print("FORMATTING: violations found — see diff above. To fix, run:")
             else:
                 print("FORMATTING: violations found. To fix, run:")
+            # Same guard as _check_rst's own bare_scoped: git_auto_detected only means
+            # anything for an actual file selection, not a full scan (explicit_files=None).
+            hint_git_auto_detected = git_auto_detected and explicit_files is not None
             for name in checks:
                 if not results.get(name, True):
-                    print(f"    {_fix_command(name, config, git_auto_detected=git_auto_detected)}")
+                    print(f"    {_fix_command(name, config, git_auto_detected=hint_git_auto_detected)}")
             print()
             print("    (or re-run with --fix to apply all fixes at once)")
         return False
