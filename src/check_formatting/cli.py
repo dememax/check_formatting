@@ -2718,11 +2718,13 @@ def check_formatting(
     else:
         _validate_check_names(checks, "checks argument")
 
+    mode = "fix" if fix else "diff" if diff else "verbose" if verbose else "check"
+
     if explicit_files is not None and not explicit_files:
         if as_json:
             empty_payload: dict[str, object] = {
                 "config_source": _CONFIG_FILE,
-                "mode": "fix" if fix else "diff" if diff else "verbose" if verbose else "check",
+                "mode": mode,
                 "checks": [],
                 "results": {},
                 "summary": {"total": 0, "passed": 0, "failed": 0},
@@ -2740,17 +2742,9 @@ def check_formatting(
     results: dict[str, bool] = {}
     outputs: dict[str, str] = {}
 
+    action = mode.capitalize()
     for name in checks:
         label, fn = _CHECKERS[name]
-        if fix:
-            action = "Fix"
-        elif diff:
-            action = "Diff"
-        elif verbose:
-            action = "Verbose"
-        else:
-            action = "Check"
-
         log()
         log("┌──────────────────────────────────────────────────────────────┐")
         header = f"{action}: {label}"
@@ -2791,7 +2785,6 @@ def check_formatting(
             return False
 
     if as_json:
-        mode = "fix" if fix else "diff" if diff else "verbose" if verbose else "check"
         overall_ok = all(results.values()) if results else True
         payload = {
             "config_source": _CONFIG_FILE,
@@ -2813,14 +2806,9 @@ def check_formatting(
         return overall_ok
 
     # Summary table
-    if fix:
-        title = "Fix Results"
-    elif diff:
-        title = "Diff Results"
-    elif verbose:
-        title = "Verbose Results"
-    else:
-        title = "Formatting Results"
+    title = {"fix": "Fix Results", "diff": "Diff Results", "verbose": "Verbose Results", "check": "Formatting Results"}[
+        mode
+    ]
     title_cell = f"  {title}"
     log()
     log("╔══════════════════════════════════════════════════════════════╗")
