@@ -133,5 +133,5 @@ def test_check_rst_sorts_explicit_files_like_other_checkers(tmp_path: Path, monk
     ok = check_formatting._check_rst(root, explicit_files=[file_b, file_a])
 
     assert ok is True
-    file_args = captured["cmd"][1:]
+    file_args = captured["cmd"][2:]
     assert file_args == [str(file_a), str(file_b)]

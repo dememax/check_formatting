@@ -17,7 +17,7 @@ on a clean release tree, contradicting `--all`'s "regardless of git state" contr
 These tests pin the corrected behavior: auto-detected files run check_rst bare (to
 preserve hunk-scoping), mutation-only modes use check_rst's matching fast paths,
 `explicit_files=None` with a configured `[rst].dir` runs
-`check_rst --recursive <dir>` (a genuine full scan), and genuinely user-typed explicit
+`check_rst check --recursive <dir>` (a genuine full scan), and genuinely user-typed explicit
 files keep today's whole-file behavior.
 """
 
@@ -54,7 +54,7 @@ def test_check_rst_auto_detected_files_run_bare_not_explicit(tmp_path: Path, mon
     ok = check_formatting._check_rst(root, fix=True, explicit_files=[rst_file], git_auto_detected=True)
 
     assert ok is True
-    assert captured["cmd"] == ["/usr/bin/check_rst", "--fix-only"]
+    assert captured["cmd"] == ["/usr/bin/check_rst", "fix", "--fast"]
 
 
 def test_check_rst_diff_uses_preview_only_backend_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,7 +75,7 @@ def test_check_rst_diff_uses_preview_only_backend_mode(tmp_path: Path, monkeypat
     ok = check_formatting._check_rst(tmp_path, diff=True, explicit_files=[rst_file])
 
     assert ok is True
-    assert captured["cmd"] == ["/usr/bin/check_rst", "--diff-only", str(rst_file)]
+    assert captured["cmd"] == ["/usr/bin/check_rst", "diff", "--fast", str(rst_file)]
 
 
 def test_check_rst_user_typed_explicit_files_stay_whole_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,12 +98,12 @@ def test_check_rst_user_typed_explicit_files_stay_whole_file(tmp_path: Path, mon
     ok = check_formatting._check_rst(root, fix=True, explicit_files=[rst_file])
 
     assert ok is True
-    assert captured["cmd"] == ["/usr/bin/check_rst", "--fix", str(rst_file)]
+    assert captured["cmd"] == ["/usr/bin/check_rst", "fix", str(rst_file)]
 
 
 def test_check_rst_full_scan_uses_recursive_configured_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """explicit_files=None (--all, or a direct library call like release.py's) must run
-    check_rst --recursive <configured dir> for a genuine full-repo scan — not bare mode,
+    check_rst check --recursive <configured dir> for a genuine full-repo scan — not bare mode,
     which is git-diff-scoped and would check nothing on a clean release tree."""
     captured: dict[str, list[str]] = {}
 
@@ -117,7 +117,7 @@ def test_check_rst_full_scan_uses_recursive_configured_dir(tmp_path: Path, monke
     ok = check_formatting._check_rst(tmp_path, explicit_files=None, recursive_dir="docs")
 
     assert ok is True
-    assert captured["cmd"] == ["/usr/bin/check_rst", "--recursive", "docs"]
+    assert captured["cmd"] == ["/usr/bin/check_rst", "check", "--recursive", "docs"]
 
 
 def test_check_rst_full_scan_without_configured_dir_fails_clearly(
@@ -172,5 +172,5 @@ def test_rst_fix_hint_matches_effective_scope(tmp_path: Path) -> None:
     (tmp_path / ".check_formatting.toml").write_text('checks = ["rst"]\n')
     config = check_formatting._load_project_config(tmp_path)
 
-    assert check_formatting._fix_command("rst", config, git_auto_detected=True) == "check_rst --fix-only"
-    assert check_formatting._fix_command("rst", config, git_auto_detected=False) == "check_rst --fix"
+    assert check_formatting._fix_command("rst", config, git_auto_detected=True) == "check_rst fix --fast"
+    assert check_formatting._fix_command("rst", config, git_auto_detected=False) == "check_rst fix"
