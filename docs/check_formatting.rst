@@ -191,7 +191,7 @@ File selection
        validating the project configuration.
    * - ``--all``
      - Every configured target in the repository, regardless of Git state.
-       ``rst`` uses ``check_rst --recursive`` with ``[rst].dir``.  This option
+       ``rst`` uses ``check_rst check --recursive`` with ``[rst].dir``.  This option
        cannot be combined with FILE arguments; selecting ``rst`` without a
        configured directory is an error, never a changed-file fallback.
    * - ``-- FILE ...``
@@ -223,11 +223,12 @@ Native tier
 ``rst``
    ``check_rst`` is invoked without explicit filenames for the auto-detected
    scope, preserving its native Git-hunk behavior.  Fix mode selects
-   ``--fix-only`` and diff mode selects ``--diff-only`` so the wrapper's
+   ``fix --fast`` and diff mode selects ``diff --fast`` so the wrapper's
    mutation-only and preview-only contracts do not trigger duplicate Sphinx
    validation.  A user-provided RST file is intentionally passed explicitly
    and therefore checked or fixed as a whole file; its fix mode retains
-   ordinary ``--fix``.  ``--all`` is a recursive whole-tree scan and requires
+   ordinary ``fix`` (full validation, not ``--fast``).  ``--all`` is a
+   recursive whole-tree scan (``check_rst check --recursive``) and requires
    ``[rst].dir``.
 
 If no usable hunk range exists, such as for an untracked file or a pure
@@ -310,7 +311,7 @@ Excluding files
 
 Backend limitations affect full-scan exclusions.  RST uses ``check_rst``'s own
 selection and does not receive either wrapper exclusion mechanism; invoke
-``check_rst --recursive ... --exclude ...`` directly for an excluded RST tree
+``check_rst check --recursive ... --exclude ...`` directly for an excluded RST tree
 audit.  Meson, Web, and Python delegate some full-scan modes to backend
 directory or glob processing, so their native ignore configuration may also
 be required.  Explicit-file, diff, and fix paths can apply the wrapper's

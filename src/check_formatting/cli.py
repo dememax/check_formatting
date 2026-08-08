@@ -105,15 +105,15 @@ check (default)
              overrides in .prettierrc)
     mypy   — mypy strict type-checker on [mypy].dirs, falling back to
              [python].dirs; configuration from [tool.mypy] in pyproject.toml
-    rst    — check_rst; three distinct scopes depending on how files were
-             selected (see _check_rst's docstring and check_rst's guide,
+    rst    — check_rst check; three distinct scopes depending on how files
+             were selected (see _check_rst's docstring and check_rst's guide,
              "History protection" for the full rationale): the default
-             git-auto-detected scope runs check_rst bare (hunk-scoped —
+             git-auto-detected scope runs check_rst check bare (hunk-scoped —
              preserves check_rst's own "fix only what you changed"
-             contract), a user-typed FILE argument runs check_rst with
+             contract), a user-typed FILE argument runs check_rst check with
              that file explicitly (whole-file scope — the user asked for
              it), and explicit_files=None (--all, or a direct library
-             call) runs check_rst --recursive on [rst].dir (a genuine
+             call) runs check_rst check --recursive on [rst].dir (a genuine
              full-repo scan; missing [rst].dir is an error).
              Sphinx facts come from .check_rst.toml at the repository root.
     clang-tidy, cmake, kconfig, shell, yaml — not necessarily in a given
@@ -139,7 +139,7 @@ verbose (``--verbose``)
     json   — npx prettier --check --log-level log (same files as check mode)
     ini    — npx prettier --check --log-level log (same files as check mode)
     mypy   — mypy --show-error-context [mypy].dirs (or [python].dirs fallback)
-    rst    — check_rst --verbose (adds context lines to each finding)
+    rst    — check_rst check --verbose (adds context lines to each finding)
     clang-tidy, cmake, kconfig, shell, yaml — same file selection as check
              mode; most expose no extra diagnostic flags (see each
              ``_check_*`` function's docstring)
@@ -157,7 +157,7 @@ diff (``--diff``)
     json   — npx prettier <file> (stdout) vs original, via difflib
     ini    — npx prettier <file> (stdout) vs original, via difflib
     mypy   — same as check (mypy has no diff mode)
-    rst    — check_rst --diff-only (native mechanical preview without validation)
+    rst    — check_rst diff --fast (native mechanical preview without validation)
     cmake  — cmake-format <file> (stdout) vs original, via difflib
     yaml   — npx prettier <file> (stdout) vs original, via difflib
     clang-tidy, kconfig, shell — same as check (none of the three
@@ -201,8 +201,8 @@ Ignore file (``.formatting-ignore``)
     the tools' own ignore mechanisms for finer control:
     ``.prettierignore`` for prettier, ``[tool.ruff.exclude]`` in
     ``pyproject.toml`` for ruff.  The ``rst`` checker never consults this file
-    or the wrapper's ``--exclude`` option.  Run ``check_rst --recursive ...
-    --exclude ...`` directly when an RST tree audit needs exclusions.
+    or the wrapper's ``--exclude`` option.  Run ``check_rst check --recursive
+    ... --exclude ...`` directly when an RST tree audit needs exclusions.
 
 Prerequisites
 -------------
@@ -2413,11 +2413,14 @@ def _check_rst(
 ) -> bool:
     """Run check_rst on RST documentation files.
 
-    Uses the installed ``check_rst`` console entry point from PATH.
-    The Sphinx facts (``--sphinx-src docs``, the incremental build cache)
-    come from ``.check_rst.toml`` at the repository root — a committed,
-    tool-echoed, CLI-overridable declaration — so no flags are passed
-    here.
+    Uses the installed ``check_rst`` console entry point from PATH, on its
+    current verb-based CLI (``check``/``fix``/``diff``, global options such
+    as ``--sphinx-src``/``--config`` given *before* the verb, git-style —
+    see check_rst's guide, "Global option position").  The Sphinx facts
+    (``--sphinx-src docs``, the incremental build cache) come from
+    ``.check_rst.toml`` at the repository root — a committed, tool-echoed,
+    CLI-overridable declaration — so no flags are passed here; check_rst
+    discovers it from ``cwd`` (``root``) on its own.
 
     check_rst distinguishes bare invocation (no file arguments — git-diff-scoped:
     adornment fixes apply only to changed hunks) from being given explicit
@@ -2434,21 +2437,33 @@ def _check_rst(
       routine ``--fix`` from hunk-scoped to whole-file scoped, and risk
       renormalizing pre-existing, deliberately non-standard adornments
       (historical entries, or externally-adopted documents with their
-      own style) elsewhere in a touched file.
+      own style) elsewhere in a touched file.  Fix mode uses ``fix --fast``
+      here (mutate without the validation phases — check_rst's guide, the
+      "three-step loop": mutate fast, then a separate ``check`` confirms).
     - *explicit_files* is a list and *git_auto_detected* is False — the user
       (or a caller) genuinely named these files.  Pass them to check_rst
       directly: whole-file scope is the correct, explicitly-requested
       behavior here (see check_rst's guide: "Fix a specific file in full only
       when the user explicitly confirms that file should be normalized").
+      Fix mode uses ordinary ``fix`` (not ``--fast``), which mutates and then
+      runs the same full validation pipeline as ``check`` in one pass.
     - *explicit_files* is ``None`` — a real full-repo scan is wanted (``--all``
       on the CLI, or a direct release-gate library call). Bare mode does NOT
       mean this: it is git-diff-scoped by design and checks nothing on a clean
       tree — exactly the release gate's ``--all`` contract ("regardless of git
       state"). Use
-      ``check_rst --recursive <recursive_dir>`` (``.check_formatting.toml``'s
+      ``check_rst check --recursive <recursive_dir>`` (``.check_formatting.toml``'s
       ``[rst].dir``) for a genuine unconditional scan.  A project with no
       ``[rst].dir`` fails clearly: silently falling back to bare mode would
       violate ``--all``'s scope contract.
+
+    Diff mode always selects ``diff --fast`` regardless of scope — the fast,
+    parser-free preview (no lint/docutils/Sphinx phases), matching this
+    wrapper's own "mechanical preview only" ``--diff`` promise.  Note this is
+    the one check_rst mode whose exit code means "a change would be made"
+    rather than "an ERROR was found" (check_rst's guide, "Fast mechanical
+    mutation and previews") — for this wrapper's purposes both count as "not
+    clean", which is the right outcome for ``--diff``.
 
     ``.formatting-ignore`` and the wrapper's ``--exclude`` are not consulted.
     Run check_rst's recursive mode directly when an RST tree audit needs its
@@ -2486,17 +2501,17 @@ def _check_rst(
         base = [rst_tool]
 
     if fix:
-        mode = "--fix-only" if git_auto_detected else "--fix"
-        log(f"▶ check_rst {mode}  {label}")
-        return _run([base[0], mode, *base[1:]], cwd=root) == 0
+        verb = ["fix", "--fast"] if git_auto_detected else ["fix"]
+        log(f"▶ check_rst {' '.join(verb)}  {label}")
+        return _run([base[0], *verb, *base[1:]], cwd=root) == 0
     if diff:
-        log(f"▶ check_rst --diff-only  {label}")
-        return _run([base[0], "--diff-only", *base[1:]], cwd=root) == 0
-    cmd = base
+        log(f"▶ check_rst diff --fast  {label}")
+        return _run([base[0], "diff", "--fast", *base[1:]], cwd=root) == 0
+    cmd = [base[0], "check", *base[1:]]
     if verbose:
         log(f"  {rst_tool}")
-        cmd = [base[0], "--verbose", *base[1:]]
-    log(f"▶ check_rst  {label}")
+        cmd = [base[0], "check", "--verbose", *base[1:]]
+    log(f"▶ check_rst check  {label}")
     return _run(cmd, cwd=root) == 0
 
 
@@ -2575,7 +2590,7 @@ def _fix_command(name: str, config: ProjectConfig, *, git_auto_detected: bool = 
     if name == "mypy":
         return "(mypy has no automatic fix — resolve type errors manually)"
     if name == "rst":
-        return "check_rst --fix-only" if git_auto_detected else "check_rst --fix"
+        return "check_rst fix --fast" if git_auto_detected else "check_rst fix"
     if name == "clang-tidy":
         return "(clang-tidy has no automatic fix — resolve violations manually)"
     if name == "cmake":

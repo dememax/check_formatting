@@ -129,7 +129,7 @@ pattern containing `/` matches the full relative path; a bare pattern
 matches only the file's basename). `--exclude PATTERN` (repeatable) adds
 an ad hoc, single-invocation exclusion without editing the committed file.
 RST is the exception: `check_rst` owns its native selection, so invoke
-`check_rst --recursive ... --exclude ...` directly for an excluded RST audit.
+`check_rst check --recursive ... --exclude ...` directly for an excluded RST audit.
 
 ## Checkers
 
@@ -243,9 +243,9 @@ whole-file scope risky there.
 | `shell` | shellcheck | No known native flag |
 | `rst` | check_rst | Yes — check_rst's own git integration |
 
-For RST, default Git-scoped fixing uses `check_rst --fix-only` and diff
-mode uses `check_rst --diff-only`. Explicit files and configured recursive
-scans retain ordinary `--fix` because those scopes deliberately request
+For RST, default Git-scoped fixing uses `check_rst fix --fast` and diff
+mode uses `check_rst diff --fast`. Explicit files and configured recursive
+scans retain ordinary `check_rst fix` because those scopes deliberately request
 whole-file validation. An RST `--all` run without `[rst].dir` is an error;
 the tool never silently substitutes a changed-file scan for a requested full
 scan.
