@@ -16,47 +16,37 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
-
 from check_formatting import cli as check_formatting
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
 
-def test_check_ini_excluded_count_message_includes_count(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+
+def test_check_ini_excluded_count_message_includes_count(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = tmp_path
     ini_file = root / "settings.ini"
     ini_file.write_text("[section]\nkey = value\n")
 
-    ok = check_formatting._check_ini(
-        root, explicit_files=[ini_file], ignore_patterns=["settings.ini"], globs=["*.ini"]
-    )
+    ok = check_formatting._check_ini(root, explicit_files=[ini_file], ignore_patterns=["settings.ini"], globs=["*.ini"])
 
     assert ok is True
     assert "(all 1 INI file(s) excluded by .formatting-ignore)" in capsys.readouterr().out
 
 
-def test_check_web_excluded_count_message_includes_count(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_check_web_excluded_count_message_includes_count(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = tmp_path
     web_file = root / "index.html"
     web_file.write_text("<html></html>\n")
 
-    ok = check_formatting._check_web(
-        root, explicit_files=[web_file], ignore_patterns=["index.html"], globs=["*.html"]
-    )
+    ok = check_formatting._check_web(root, explicit_files=[web_file], ignore_patterns=["index.html"], globs=["*.html"])
 
     assert ok is True
     assert "(all 1 web file(s) excluded by .formatting-ignore)" in capsys.readouterr().out
 
 
-def test_check_json_excluded_count_message_includes_count(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_check_json_excluded_count_message_includes_count(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = tmp_path
     json_file = root / "config.json"
     json_file.write_text("{}\n")
@@ -69,9 +59,7 @@ def test_check_json_excluded_count_message_includes_count(
     assert "(all 1 JSON file(s) excluded by .formatting-ignore)" in capsys.readouterr().out
 
 
-def test_check_meson_excluded_count_message_includes_count(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_check_meson_excluded_count_message_includes_count(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = tmp_path
     build_file = root / "meson.build"
     build_file.write_text("project('x')\n")
