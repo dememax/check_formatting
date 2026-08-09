@@ -55,7 +55,9 @@ def _mock_converging_merge(monkeypatch: pytest.MonkeyPatch) -> None:
         return 0, _FORMATTED  # both calls: whole-file reformat, then converging validation
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", fake_fmt_stdout)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(2, 2)])
+    monkeypatch.setattr(
+        check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: {f: [(2, 2)] for f in files}
+    )
 
 
 @pytest.mark.parametrize(("checker_name", "filename", "extra_kwargs"), _CASES)
@@ -120,10 +122,10 @@ def test_check_prettier_config_not_auto_detected_stays_native_check(
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
 
-    def fail_if_called(root: Path, file: Path) -> None:
+    def fail_if_called(root: Path, files: list[Path]) -> None:
         raise AssertionError("target computation must not run without git_auto_detected")
 
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", fail_if_called)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", fail_if_called)
     checker = getattr(check_formatting, checker_name)
 
     ok = checker(tmp_path, explicit_files=[f], **extra_kwargs)

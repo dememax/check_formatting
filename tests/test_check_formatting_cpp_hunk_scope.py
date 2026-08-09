@@ -262,7 +262,9 @@ def test_check_cpp_fix_auto_detected_uses_per_file_lines_scope(tmp_path: Path, m
         return 0
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(5, 5)])
+    monkeypatch.setattr(
+        check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: {f: [(5, 5)] for f in files}
+    )
 
     ok = check_formatting._check_cpp(root, fix=True, explicit_files=[f], git_auto_detected=True)
 
@@ -286,7 +288,7 @@ def test_check_cpp_fix_auto_detected_no_ranges_falls_back_to_whole_file(
         return 0
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: None)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: dict.fromkeys(files))
 
     ok = check_formatting._check_cpp(root, fix=True, explicit_files=[f], git_auto_detected=True)
 
@@ -313,10 +315,10 @@ def test_check_cpp_fix_not_auto_detected_stays_whole_file_batched(
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
 
-    def fail_if_called(root: Path, file: Path) -> None:
+    def fail_if_called(root: Path, files: list[Path]) -> None:
         raise AssertionError("hunk ranges must not be computed when git_auto_detected is False")
 
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", fail_if_called)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", fail_if_called)
 
     ok = check_formatting._check_cpp(root, fix=True, explicit_files=[f1, f2])
 
@@ -339,7 +341,9 @@ def test_check_cpp_check_mode_auto_detected_uses_lines_scope(tmp_path: Path, mon
         return 0
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(5, 5)])
+    monkeypatch.setattr(
+        check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: {f: [(5, 5)] for f in files}
+    )
 
     ok = check_formatting._check_cpp(root, explicit_files=[f], git_auto_detected=True)
 
@@ -359,7 +363,9 @@ def test_check_cpp_diff_mode_auto_detected_uses_lines_scope(tmp_path: Path, monk
         return 0, f.read_text()
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", fake_fmt_stdout)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(5, 5)])
+    monkeypatch.setattr(
+        check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: {f: [(5, 5)] for f in files}
+    )
 
     ok = check_formatting._check_cpp(root, diff=True, explicit_files=[f], git_auto_detected=True)
 
@@ -379,7 +385,7 @@ def test_check_cpp_auto_detected_scope_uses_configured_globs_not_hardcoded_suffi
         return 0
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: None)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: dict.fromkeys(files))
 
     ok = check_formatting._check_cpp(
         tmp_path,

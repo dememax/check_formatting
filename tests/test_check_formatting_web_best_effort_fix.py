@@ -98,9 +98,8 @@ def test_best_effort_fix_writes_scoped_merge_when_it_canonicalizes_to_full_forma
         return 0, formatted
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", fake_fmt_stdout)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(2, 2)])
 
-    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path)
+    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path, [(2, 2)])
 
     assert ok is True
     assert status == "git-scoped merge"
@@ -133,9 +132,8 @@ def test_best_effort_fix_falls_back_when_candidate_canonicalizes_differently(
         return 0, "<div>\n  <p>ONE</p>\n  <p>STILL DIFFERENT</p>\n</div>\n"
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", fake_fmt_stdout)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(2, 2)])
 
-    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path)
+    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path, [(2, 2)])
 
     assert ok is True
     assert status.startswith("whole-file fallback")
@@ -150,9 +148,8 @@ def test_best_effort_fix_uses_whole_file_when_no_hunk_ranges(tmp_path: Path, mon
     formatted = "<div>\n  <p>one</p>\n</div>\n"
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", lambda cmd, cwd: (0, formatted))
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: None)
 
-    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path)
+    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path, None)
 
     assert ok is True
     assert status == "whole-file fix (no git hunk info)"
@@ -166,12 +163,11 @@ def test_best_effort_fix_already_compliant_does_not_write(tmp_path: Path, monkey
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", lambda cmd, cwd: (0, content))
 
-    def fail_if_called(root: Path, file: Path) -> None:
-        raise AssertionError("hunk ranges must not be computed when already compliant")
-
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", fail_if_called)
-
-    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path)
+    # Hunk ranges are now precomputed once per batch by the caller, not
+    # looked up here — the "don't compute ranges you don't need" guarantee
+    # this test used to pin at this level now lives one level up, in
+    # _fix_prettier_files/_report_prettier_files_git_scoped's own batching.
+    ok, status = check_formatting._best_effort_prettier_fix(f, tmp_path, None)
 
     assert ok is True
     assert status == "already compliant"
@@ -184,7 +180,7 @@ def test_best_effort_fix_reports_failure_when_prettier_missing(tmp_path: Path, m
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", lambda cmd, cwd: (127, ""))
 
-    ok, _status = check_formatting._best_effort_prettier_fix(f, tmp_path)
+    ok, _status = check_formatting._best_effort_prettier_fix(f, tmp_path, None)
 
     assert ok is False
 
@@ -203,11 +199,12 @@ def test_fix_prettier_files_git_scope_runs_each_file_and_aggregates_failures(
 
     calls: list[Path] = []
 
-    def fake_best_effort(file: Path, root: Path) -> tuple[bool, str]:
+    def fake_best_effort(file: Path, root: Path, ranges: list[tuple[int, int]] | None) -> tuple[bool, str]:
         calls.append(file)
         return file == files[0], "git-scoped merge" if file == files[0] else "prettier exited 2"
 
     monkeypatch.setattr(check_formatting, "_best_effort_prettier_fix", fake_best_effort)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: dict.fromkeys(files))
 
     def fail_if_batched(cmd: list[str], cwd: Path) -> int:
         raise AssertionError("git-auto-detected scope must not use batched --write")
@@ -242,7 +239,7 @@ def test_fix_prettier_files_non_git_scope_stays_batched(tmp_path: Path, monkeypa
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
 
-    def fail_if_called(file: Path, root: Path) -> tuple[bool, str]:
+    def fail_if_called(file: Path, root: Path, ranges: list[tuple[int, int]] | None) -> tuple[bool, str]:
         raise AssertionError("whole-file scope must not run the best-effort merger")
 
     monkeypatch.setattr(check_formatting, "_best_effort_prettier_fix", fail_if_called)
@@ -323,7 +320,7 @@ def test_check_web_fix_auto_detected_dispatches_to_best_effort(tmp_path: Path, m
 
     calls: list[Path] = []
 
-    def fake_best_effort(file: Path, root: Path) -> tuple[bool, str]:
+    def fake_best_effort(file: Path, root: Path, ranges: list[tuple[int, int]] | None) -> tuple[bool, str]:
         calls.append(file)
         return True, "git-scoped merge"
 
@@ -353,7 +350,7 @@ def test_check_web_fix_not_auto_detected_stays_batched(tmp_path: Path, monkeypat
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
 
-    def fail_if_called(file: Path, root: Path) -> None:
+    def fail_if_called(file: Path, root: Path, ranges: list[tuple[int, int]] | None) -> None:
         raise AssertionError("best-effort merge must not run when git_auto_detected is False")
 
     monkeypatch.setattr(check_formatting, "_best_effort_prettier_fix", fail_if_called)

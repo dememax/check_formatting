@@ -51,7 +51,9 @@ def _mock_converging_merge(monkeypatch: pytest.MonkeyPatch) -> None:
         return 0, _FORMATTED  # canonical validation: converges
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", fake_fmt_stdout)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(2, 2)])
+    monkeypatch.setattr(
+        check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: {f: [(2, 2)] for f in files}
+    )
 
 
 def _mock_diverging_merge(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,7 +66,9 @@ def _mock_diverging_merge(monkeypatch: pytest.MonkeyPatch) -> None:
         return 0, "one\nTWO_FIXED\nthree\nSTILL_DIFFERENT\nfive\n"  # canonical validation: diverges
 
     monkeypatch.setattr(check_formatting, "_fmt_stdout", fake_fmt_stdout)
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", lambda root, file: [(2, 2)])
+    monkeypatch.setattr(
+        check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: {f: [(2, 2)] for f in files}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -131,10 +135,10 @@ def test_check_web_check_not_auto_detected_still_uses_native_prettier_check(
 
     monkeypatch.setattr(check_formatting, "_run", fake_run)
 
-    def fail_if_called(root: Path, file: Path) -> None:
+    def fail_if_called(root: Path, files: list[Path]) -> None:
         raise AssertionError("target computation must not run without git_auto_detected")
 
-    monkeypatch.setattr(check_formatting, "_git_diff_hunk_ranges", fail_if_called)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", fail_if_called)
 
     ok = check_formatting._check_web(tmp_path, explicit_files=[f])
 
