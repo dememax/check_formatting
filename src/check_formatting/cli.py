@@ -1401,20 +1401,26 @@ def _fix_prettier_files(
     """Fix Prettier-backed *files*, optionally using best-effort Git hunk scope.
 
     Shared by the web, JSON/JSONC, INI, and YAML checkers.  Git-auto-detected
-    scope runs :func:`_best_effort_prettier_fix` per file so each candidate
-    can be merged and canonically validated independently; failures are
-    accumulated without preventing later files from being attempted.  Every
-    deliberate whole-file scope (``--all`` or user-typed FILE arguments)
-    retains Prettier's single batched ``--write`` invocation.
+    scope runs :func:`_best_effort_prettier_fix` per file concurrently — each
+    candidate is independent (its own file, its own merge/validation) and
+    this pipeline already captures rather than streams its subprocess
+    output, so there is no interleaving risk in running them at once.
+    Results are still consumed/printed in *files*' original order once each
+    resolves; failures are accumulated without preventing other files from
+    being attempted.  Every deliberate whole-file scope (``--all`` or
+    user-typed FILE arguments) retains Prettier's single batched ``--write``
+    invocation.
     """
     if git_auto_detected:
         log(f"▶ npx prettier --write (best-effort git-scoped)  {label}")
         hunk_ranges = _batched_git_diff_hunk_ranges(root, files)
-        ok = True
-        for file in files:
-            file_ok, status = _best_effort_prettier_fix(file, root, hunk_ranges[file])
-            log(f"  {file.relative_to(root)}: {status}")
-            ok = file_ok and ok
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            futures = [pool.submit(_best_effort_prettier_fix, file, root, hunk_ranges[file]) for file in files]
+            ok = True
+            for file, future in zip(files, futures, strict=True):
+                file_ok, status = future.result()
+                log(f"  {file.relative_to(root)}: {status}")
+                ok = file_ok and ok
         return ok
 
     log(f"▶ npx prettier --write  {label}")
@@ -1440,21 +1446,27 @@ def _report_prettier_files_git_scoped(
     When *show_diff*, prints a unified diff (original vs. target) for
     each file that differs, via :func:`_show_diff`; otherwise only the
     per-file status line is logged and the boolean verdict is computed.
+
+    Each file's target is computed concurrently (independent, capture-based
+    work — see :func:`_fix_prettier_files`'s docstring for why that's safe
+    here), consumed/printed in *files*' original order once each resolves.
     """
     hunk_ranges = _batched_git_diff_hunk_ranges(root, files)
-    any_violation = False
-    for file in files:
-        original = file.read_text(encoding="utf-8")
-        ok, target, status = _best_effort_prettier_target(file, root, hunk_ranges[file])
-        if not ok:
-            print(f"ERROR: {status} on {file.name}")
-            return False
-        log(f"  {file.relative_to(root)}: {status}")
-        if show_diff:
-            if _show_diff(original, target, str(file.relative_to(root))):
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        futures = [pool.submit(_best_effort_prettier_target, file, root, hunk_ranges[file]) for file in files]
+        any_violation = False
+        for file, future in zip(files, futures, strict=True):
+            original = file.read_text(encoding="utf-8")
+            ok, target, status = future.result()
+            if not ok:
+                print(f"ERROR: {status} on {file.name}")
+                return False
+            log(f"  {file.relative_to(root)}: {status}")
+            if show_diff:
+                if _show_diff(original, target, str(file.relative_to(root))):
+                    any_violation = True
+            elif original != target:
                 any_violation = True
-        elif original != target:
-            any_violation = True
     return not any_violation
 
 
