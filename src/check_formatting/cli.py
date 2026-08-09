@@ -1122,9 +1122,22 @@ def _filter_files(
     return kept, len(files) - len(kept)
 
 
-def _configured_glob_paths(root: pathlib.Path, globs: Sequence[str]) -> frozenset[pathlib.Path]:
-    """Return the existing files selected by project-configured *globs*."""
-    return frozenset(f.resolve() for glob in globs for f in root.glob(glob) if f.is_file())
+def _file_matches_any_glob(file: pathlib.Path, root: pathlib.Path, globs: Sequence[str]) -> bool:
+    """True if *file* would be selected by any of *globs* under *root*.
+
+    Tests *file* directly against each pattern via ``PurePath.full_match``
+    (Python 3.13+) instead of globbing the entire configured target tree
+    from disk just to check membership of a handful of explicit/git-changed
+    files — ``full_match`` is designed as ``glob()``'s own membership test
+    and was verified empirically to produce identical accept/reject
+    decisions, including for ``**`` (both a nested match and a file sitting
+    directly at *root*, since ``**`` matches zero-or-more directories).
+    """
+    try:
+        relative = file.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False  # file is outside root entirely — no configured glob could match it
+    return any(relative.full_match(pattern) for pattern in globs)
 
 
 def _select_explicit_from_globs(
@@ -1146,7 +1159,7 @@ def _select_explicit_from_globs(
             explicit_files,
             root,
             ignore_patterns,
-            exact_paths=_configured_glob_paths(root, globs),
+            configured_globs=globs,
         )
     return _select_explicit(
         explicit_files,
@@ -1196,6 +1209,7 @@ def _select_explicit(
     extensions: frozenset[str] | None = None,
     exact_names: frozenset[str] | None = None,
     exact_paths: frozenset[pathlib.Path] | None = None,
+    configured_globs: Sequence[str] | None = None,
 ) -> tuple[list[pathlib.Path], int] | None:
     """Intersect *explicit_files* with this checker's file-type set.
 
@@ -1208,6 +1222,9 @@ def _select_explicit(
     - *extensions*  — ``file.suffix`` in the set (e.g. ``{".cpp", ".hpp"}``)
     - *exact_names* — ``file.name`` in the set (e.g. ``{"meson.build"}``)
     - *exact_paths* — ``file.resolve()`` in the set (used for JSONC files)
+    - *configured_globs* — matches any pattern directly (see
+      :func:`_file_matches_any_glob`), without globbing the whole
+      configured target tree first
     """
     matched = [
         f
@@ -1215,6 +1232,7 @@ def _select_explicit(
         if (extensions and f.suffix in extensions)
         or (exact_names and f.name in exact_names)
         or (exact_paths and f.resolve() in exact_paths)
+        or (configured_globs and _file_matches_any_glob(f, root, configured_globs))
     ]
     if not matched:
         return None
