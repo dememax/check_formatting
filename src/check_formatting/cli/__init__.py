@@ -404,8 +404,7 @@ Callable as a library (from another script in ``scripts/``)::
 from __future__ import annotations
 
 import argparse
-import contextlib
-import io
+import concurrent.futures
 import json
 import pathlib
 import sys
@@ -468,6 +467,7 @@ from check_formatting.cli._subprocess import (
     _run,
     _run_capture_merged,
     _show_diff,
+    _ThreadLocalStdout,
     _tool_version_string,
 )
 
@@ -694,46 +694,88 @@ def check_formatting(
     outputs: dict[str, str] = {}
 
     action = mode.capitalize()
-    for name in checks:
-        label, fn, *_ = _CHECKERS[name]
-        log()
-        log("┌──────────────────────────────────────────────────────────────┐")
-        header = f"{action}: {label}"
-        log(f"│  {header:<60}│")
-        log("└──────────────────────────────────────────────────────────────┘")
-        log()
 
-        if as_json:
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                ok = fn(
-                    root,
-                    fix,
-                    diff,
-                    verbose,
-                    ignore_patterns,
-                    explicit_files,
-                    quiet=True,
-                    **_checker_kwargs(name, config, git_auto_detected),
-                )
-            outputs[name] = buf.getvalue()
-        else:
-            ok = fn(
+    def run_one(name: str) -> tuple[bool, str]:
+        """Run checker *name* with its own private stdout capture buffer.
+
+        Every checker dispatches concurrently (see below), so this always
+        captures rather than only under --json: 11 of 13 checkers still
+        stream live via _run's per-line sys.stdout.write, which would
+        interleave garbage if several ran at once against the single real
+        stdout. mux (the thread-local stdout installed for the duration of
+        this whole dispatch) routes this thread's writes to its own
+        buffer instead.
+        """
+        checker = _CHECKERS[name]
+        buf = mux.register()
+        try:
+            ok = checker.fn(
                 root,
                 fix,
                 diff,
                 verbose,
                 ignore_patterns,
                 explicit_files,
-                quiet=quiet,
+                quiet=True if as_json else quiet,
                 **_checker_kwargs(name, config, git_auto_detected),
             )
-        results[name] = ok
+        finally:
+            mux.unregister()
+        return ok, buf.getvalue()
 
-        if not ok and fail_fast:
-            if as_json:
-                break
-            return False
+    fail_fast_triggered = False
+    real_stdout = sys.stdout
+    mux = _ThreadLocalStdout(real_stdout)
+    sys.stdout = mux
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(checks) or 1) as pool:
+            # Submit every checker immediately — dispatch is unconditionally
+            # concurrent, fail_fast or not. Consuming futures below in
+            # checks' original order, only after each has actually
+            # completed, is what keeps printed output deterministic
+            # (checks-list order, never completion order) while still
+            # gaining wall-clock parallelism — the same pattern already
+            # used for the ruff/kconfig/prettier concurrency in this
+            # project. Exiting the `with` block waits for every submitted
+            # future regardless of whether the loop below `break`s early,
+            # which is exactly what makes --fail-fast's new "every checker
+            # still runs to completion" guarantee hold without any extra
+            # bookkeeping.
+            futures = {name: pool.submit(run_one, name) for name in checks}
+
+            for name in checks:
+                ok, output = futures[name].result()
+                results[name] = ok
+                outputs[name] = output
+
+                if not as_json:
+                    label = _CHECKERS[name].label
+                    log()
+                    log("┌──────────────────────────────────────────────────────────────┐")
+                    header = f"{action}: {label}"
+                    log(f"│  {header:<60}│")
+                    log("└──────────────────────────────────────────────────────────────┘")
+                    log()
+                    print(output, end="")
+
+                if not ok and fail_fast:
+                    # "Stop reporting", not "stop running": every checker was
+                    # already submitted above and keeps running to
+                    # completion in the background regardless — this only
+                    # truncates what gets printed/included in the payload,
+                    # matching today's "no summary table" contract for a
+                    # report built from already-known results instead of an
+                    # early return. Threads can't be safely killed mid-flight
+                    # in Python, and by the time a failure is known here,
+                    # other checkers are typically already running — dispatch
+                    # no longer buys fail_fast any wall-clock savings.
+                    fail_fast_triggered = True
+                    break
+    finally:
+        sys.stdout = real_stdout
+
+    if fail_fast_triggered and not as_json:
+        return False
 
     if as_json:
         overall_ok = all(results.values()) if results else True

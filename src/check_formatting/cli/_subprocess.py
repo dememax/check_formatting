@@ -8,16 +8,65 @@ live-streamed or capture-based, printing diffs, and the quiet-aware
 from __future__ import annotations
 
 import difflib
+import io
 import pathlib
 import shutil
 import subprocess
 import sys
+import threading
 from typing import TYPE_CHECKING
 
 from check_formatting import cli
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from typing import TextIO
+
+
+class _ThreadLocalStdout:
+    """A ``sys.stdout`` replacement routing each thread's writes to its own
+    private buffer, installed for the duration of :func:`check_formatting`'s
+    parallel checker dispatch.
+
+    Eleven of the thirteen checkers still stream live via :func:`_run`'s
+    per-line ``sys.stdout.write`` — safe when only one checker runs at a
+    time, but interleaved garbage if several threads write to the single
+    real ``sys.stdout`` concurrently.  Each dispatched checker's thread
+    calls :meth:`register` once before running and :meth:`unregister` once
+    after, so its writes land in its own :class:`io.StringIO` rather than
+    the shared stream.  A thread that never registers (the main thread,
+    before dispatch starts and after every checker has finished) falls
+    straight through to the *real* stdout, unaffected — this is also why a
+    single-checker run and this class's own no-op-until-registered default
+    behave identically to writing directly to stdout.
+    """
+
+    def __init__(self, real: TextIO) -> None:
+        self._real = real
+        self._local = threading.local()
+
+    def register(self) -> io.StringIO:
+        """Give the calling thread its own capture buffer; return it."""
+        buf = io.StringIO()
+        self._local.buf = buf
+        return buf
+
+    def unregister(self) -> None:
+        """Stop capturing for the calling thread — its writes (there should
+        be none left) would otherwise fall through to the real stdout."""
+        self._local.buf = None
+
+    def write(self, text: str) -> int:
+        buf: io.StringIO | None = getattr(self._local, "buf", None)
+        return (buf or self._real).write(text)
+
+    def writelines(self, lines: Sequence[str]) -> None:
+        buf: io.StringIO | None = getattr(self._local, "buf", None)
+        (buf or self._real).writelines(lines)
+
+    def flush(self) -> None:
+        buf: io.StringIO | None = getattr(self._local, "buf", None)
+        (buf or self._real).flush()
 
 
 def _run(cmd: list[str], cwd: pathlib.Path) -> int:
