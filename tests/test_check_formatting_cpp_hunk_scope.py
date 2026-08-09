@@ -130,6 +130,122 @@ def test_git_diff_hunk_ranges_pure_deletion_returns_none(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
+# _parse_git_diff_hunks_by_relpath — pure parsing, literal diff text, no subprocess
+# ---------------------------------------------------------------------------
+
+
+def test_parse_git_diff_hunks_by_relpath_multiple_files() -> None:
+    diff_output = (
+        "diff --git a/one.txt b/one.txt\n"
+        "index 111..222 100644\n"
+        "--- a/one.txt\n"
+        "+++ b/one.txt\n"
+        "@@ -2 +2 @@ a\n"
+        "-b\n"
+        "+B\n"
+        "diff --git a/two.txt b/two.txt\n"
+        "index 333..444 100644\n"
+        "--- a/two.txt\n"
+        "+++ b/two.txt\n"
+        "@@ -3 +3,2 @@ y\n"
+        "-z\n"
+        "+Z\n"
+        "+w\n"
+    )
+
+    ranges = check_formatting._parse_git_diff_hunks_by_relpath(diff_output)
+
+    assert ranges == {"one.txt": [(2, 2)], "two.txt": [(3, 4)]}
+
+
+def test_parse_git_diff_hunks_by_relpath_pure_deletion_hunk_omitted() -> None:
+    """A hunk whose new-file line count is zero contributes no range — same
+    rule _git_diff_hunk_ranges's own single-file parser already applies."""
+    diff_output = "diff --git a/one.txt b/one.txt\n--- a/one.txt\n+++ b/one.txt\n@@ -2 +1,0 @@ a\n-b\n"
+
+    ranges = check_formatting._parse_git_diff_hunks_by_relpath(diff_output)
+
+    assert ranges == {}
+
+
+def test_parse_git_diff_hunks_by_relpath_whole_file_deletion_omitted() -> None:
+    """A file deleted entirely reports "+++ /dev/null" — no new-file side to
+    derive ranges for at all, regardless of what its hunks look like."""
+    diff_output = "diff --git a/gone.txt b/gone.txt\n--- a/gone.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-x\n-y\n"
+
+    ranges = check_formatting._parse_git_diff_hunks_by_relpath(diff_output)
+
+    assert ranges == {}
+
+
+# ---------------------------------------------------------------------------
+# _batched_git_diff_hunk_ranges — real git repo, no mocking
+# ---------------------------------------------------------------------------
+
+
+def test_batched_git_diff_hunk_ranges_two_files_disjoint_hunks(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    f1 = tmp_path / "a.cpp"
+    f1.write_text("line1\nline2\nline3\n")
+    f2 = tmp_path / "b.cpp"
+    f2.write_text("x\ny\nz\n")
+    _git("add", "a.cpp", "b.cpp", cwd=tmp_path)
+    _git("commit", "-q", "-m", "initial", cwd=tmp_path)
+
+    f1.write_text("line1\nCHANGED\nline3\n")
+    f2.write_text("x\ny\nz\nw\n")
+
+    ranges = check_formatting._batched_git_diff_hunk_ranges(tmp_path, [f1, f2])
+
+    assert ranges == {f1: [(2, 2)], f2: [(4, 4)]}
+
+
+def test_batched_git_diff_hunk_ranges_empty_file_list_spawns_no_subprocess(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty `--` pathspec means "no restriction" to git, not "nothing" —
+    the empty case must be handled before any subprocess is spawned at all."""
+
+    def fail_if_called(*args: object, **kwargs: object) -> None:
+        raise AssertionError("must not spawn git for an empty file list")
+
+    monkeypatch.setattr(subprocess, "run", fail_if_called)
+
+    ranges = check_formatting._batched_git_diff_hunk_ranges(tmp_path, [])
+
+    assert ranges == {}
+
+
+def test_batched_git_diff_hunk_ranges_git_failure_returns_none_for_every_file(tmp_path: Path) -> None:
+    """A non-git directory (or any git failure) degrades to whole-file scope
+    for every file — same fallback contract as the single-file function."""
+    f1 = tmp_path / "a.cpp"
+    f1.write_text("x\n")
+    f2 = tmp_path / "b.cpp"
+    f2.write_text("y\n")
+
+    ranges = check_formatting._batched_git_diff_hunk_ranges(tmp_path, [f1, f2])
+
+    assert ranges == {f1: None, f2: None}
+
+
+def test_batched_git_diff_hunk_ranges_untracked_file_among_tracked(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    tracked = tmp_path / "a.cpp"
+    tracked.write_text("line1\nline2\n")
+    _git("add", "a.cpp", cwd=tmp_path)
+    _git("commit", "-q", "-m", "initial", cwd=tmp_path)
+    tracked.write_text("line1\nCHANGED\n")
+
+    untracked = tmp_path / "new_file.cpp"
+    untracked.write_text("brand new content\n")
+
+    ranges = check_formatting._batched_git_diff_hunk_ranges(tmp_path, [tracked, untracked])
+
+    assert ranges == {tracked: [(2, 2)], untracked: None}
+
+
+# ---------------------------------------------------------------------------
 # _check_cpp — git-scoped fix contract (mocked _run/_fmt_stdout/_git_diff_hunk_ranges)
 # ---------------------------------------------------------------------------
 
