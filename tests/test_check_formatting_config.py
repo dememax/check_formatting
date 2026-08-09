@@ -57,7 +57,7 @@ def test_config_sections_known_keys_match_expected_schema() -> None:
     section/key constants instead of hand-listing each frozenset) can't
     silently drop or rename a checker's known config key.
     """
-    assert check_formatting._CONFIG_SECTIONS == {
+    assert {
         "cpp": frozenset({"globs"}),
         "web": frozenset({"globs"}),
         "python": frozenset({"dirs"}),
@@ -69,7 +69,7 @@ def test_config_sections_known_keys_match_expected_schema() -> None:
         "shell": frozenset({"globs"}),
         "yaml": frozenset({"globs"}),
         "rst": frozenset({"dir"}),
-    }
+    } == check_formatting._CONFIG_SECTIONS
 
 
 def test_missing_config_file_is_hard_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

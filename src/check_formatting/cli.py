@@ -417,7 +417,7 @@ import sys
 import tempfile
 import tomllib
 from collections.abc import Callable, Sequence
-from typing import NamedTuple, NoReturn
+from typing import Final, NamedTuple, NoReturn
 
 # Name of the per-project ignore file (lives at the repository root).
 IGNORE_FILE = ".formatting-ignore"
@@ -431,20 +431,27 @@ CLANG_TIDY_IGNORE_FILE = ".clang-tidy-ignore"
 # Name of the per-project config file (lives at the repository root).
 _CONFIG_FILE = ".check_formatting.toml"
 
+# Each checker's (section, key) pair, the single source of truth for both
+# _CONFIG_SECTIONS' unknown-key validation and _load_project_config's
+# per-field lookups below — one place to update, not two kept in sync by
+# hand. Every section has exactly one key today.
+_CPP: Final = ("cpp", "globs")
+_WEB: Final = ("web", "globs")
+_PYTHON: Final = ("python", "dirs")
+_MYPY: Final = ("mypy", "dirs")
+_JSON: Final = ("json", "files")
+_INI: Final = ("ini", "globs")
+_CLANG_TIDY: Final = ("clang_tidy", "build_dir")
+_KCONFIG: Final = ("kconfig", "build_combos")
+_SHELL: Final = ("shell", "globs")
+_YAML: Final = ("yaml", "globs")
+_RST: Final = ("rst", "dir")
+
 # Known keys per config section (project-specific paths/globs/targets).
 # Mypy may override the Python (Ruff) target set, with Python dirs as fallback.
 _CONFIG_SECTIONS: dict[str, frozenset[str]] = {
-    "cpp": frozenset({"globs"}),
-    "web": frozenset({"globs"}),
-    "python": frozenset({"dirs"}),
-    "mypy": frozenset({"dirs"}),
-    "json": frozenset({"files"}),
-    "ini": frozenset({"globs"}),
-    "clang_tidy": frozenset({"build_dir"}),
-    "kconfig": frozenset({"build_combos"}),
-    "shell": frozenset({"globs"}),
-    "yaml": frozenset({"globs"}),
-    "rst": frozenset({"dir"}),
+    section: frozenset({key})
+    for section, key in (_CPP, _WEB, _PYTHON, _MYPY, _JSON, _INI, _CLANG_TIDY, _KCONFIG, _SHELL, _YAML, _RST)
 }
 
 _TOP_LEVEL_KEYS = frozenset({"checks", *_CONFIG_SECTIONS})
@@ -525,23 +532,21 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
 
     checks = _require_str_list(data, "checks", _CONFIG_FILE)
     _validate_check_names(checks, _CONFIG_FILE)
-    python_dirs: list[str] = _optional_section(data, "python", "dirs", _require_str_list, [])
-    mypy_dirs: list[str] = (
-        _optional_section(data, "mypy", "dirs", _require_str_list, []) if "mypy" in data else python_dirs
-    )
+    python_dirs: list[str] = _optional_section(data, *_PYTHON, _require_str_list, [])
+    mypy_dirs: list[str] = _optional_section(data, *_MYPY, _require_str_list, []) if "mypy" in data else python_dirs
     return ProjectConfig(
         checks=checks,
-        cpp_globs=_optional_section(data, "cpp", "globs", _require_str_list, []),
-        web_globs=_optional_section(data, "web", "globs", _require_str_list, []),
+        cpp_globs=_optional_section(data, *_CPP, _require_str_list, []),
+        web_globs=_optional_section(data, *_WEB, _require_str_list, []),
         python_dirs=python_dirs,
         mypy_dirs=mypy_dirs,
-        json_files=_optional_section(data, "json", "files", _require_str_list, []),
-        ini_globs=_optional_section(data, "ini", "globs", _require_str_list, []),
-        clang_tidy_build_dir=_optional_section(data, "clang_tidy", "build_dir", _require_str, ""),
-        kconfig_build_combos=_optional_section(data, "kconfig", "build_combos", _require_build_combos, []),
-        shell_globs=_optional_section(data, "shell", "globs", _require_str_list, []),
-        yaml_globs=_optional_section(data, "yaml", "globs", _require_str_list, []),
-        rst_dir=_optional_section(data, "rst", "dir", _require_str, ""),
+        json_files=_optional_section(data, *_JSON, _require_str_list, []),
+        ini_globs=_optional_section(data, *_INI, _require_str_list, []),
+        clang_tidy_build_dir=_optional_section(data, *_CLANG_TIDY, _require_str, ""),
+        kconfig_build_combos=_optional_section(data, *_KCONFIG, _require_build_combos, []),
+        shell_globs=_optional_section(data, *_SHELL, _require_str_list, []),
+        yaml_globs=_optional_section(data, *_YAML, _require_str_list, []),
+        rst_dir=_optional_section(data, *_RST, _require_str, ""),
     )
 
 
