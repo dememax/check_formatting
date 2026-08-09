@@ -2460,10 +2460,18 @@ def _check_kconfig(
 
     Check mode:   Captures output; prints the Kconfig-relevant lines
                   (warnings, "Merged configuration") while suppressing CMake
-                  toolchain-detection noise.
-    Verbose mode: Streams all west/CMake/Kconfig output to the terminal
-                  (warning-counting is skipped — the human reading the
-                  stream sees it directly).
+                  toolchain-detection noise.  Every combo's build runs
+                  concurrently (see :func:`_run_capture_merged`) — output is
+                  captured, not streamed, so concurrent combos never
+                  interleave; banners and warning lines are only ever
+                  printed in *build_combos*'s original order, once each
+                  combo's build has finished.
+    Verbose mode: Streams all west/CMake/Kconfig output to the terminal, one
+                  combo at a time, sequentially (warning-counting is skipped
+                  — the human reading the stream sees it directly).  Kept
+                  sequential deliberately: parallelizing live-streamed
+                  output from multiple combos would interleave it,
+                  defeating the point of watching it in real time.
     Diff/fix mode: Identical to check (Kconfig has neither).
 
     When explicit files are given, the check runs only if at least one has
@@ -2472,6 +2480,15 @@ def _check_kconfig(
 
     ``west`` is resolved from PATH (bare ``shutil.which``), matching this
     project's PATH-only tool-resolution policy.
+
+    Concurrent combos and build-directory isolation
+    ------------------------------------------------
+    Since combos now build concurrently, any combo relying on ``west``'s
+    default build directory will race with every other combo doing the
+    same.  Give each combo its own ``-d``/``--build-dir`` in *args* if it
+    needs isolated build state — ``west build`` already supports this flag
+    directly through *args*, no ``check_formatting``-specific configuration
+    exists or is needed for it.
     """
     log = _make_log(quiet)
     if explicit_files is not None and not any(f.suffix == ".conf" for f in explicit_files):
@@ -2503,34 +2520,47 @@ def _check_kconfig(
     )
     cmake_error_phrases = ("FATAL ERROR:", "CMake Error", "error:")
 
-    all_ok = True
-    for combo in build_combos:
-        args = combo["args"]
-        label = combo["label"]
-        cmd = [west_bin, "build", "--cmake-only", "--pristine", *args]  # type: ignore[misc]
-        log(f"▶ {' '.join(cmd)}  ({label})")
-        if verbose:
+    commands = [[west_bin, "build", "--cmake-only", "--pristine", *combo["args"]] for combo in build_combos]  # type: ignore[misc]
+
+    if verbose:
+        # Sequential and live-streamed, deliberately — see docstring.
+        all_ok = True
+        for combo, cmd in zip(build_combos, commands, strict=True):
+            log(f"▶ {' '.join(cmd)}  ({combo['label']})")
             all_ok = all_ok and (_run(cmd, cwd=root) == 0)
-            continue
-        try:
-            result = _run_capture_merged(cmd, cwd=root)
-        except FileNotFoundError:
-            print(f"ERROR: could not execute {west_bin}")
-            return False
+        return all_ok
 
-        kconfig_warnings = 0
-        for line in result.stdout.splitlines():
-            if line.strip().startswith("-- "):
-                if any(kw in line for kw in cmake_error_phrases):
+    # Non-verbose: every combo's build runs concurrently, captured rather
+    # than streamed — submitted all at once so the actual work overlaps,
+    # then consumed/printed below in build_combos's original order once
+    # each future resolves, exactly the shape a sequential run would have
+    # produced.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(build_combos)) as pool:
+        futures = [pool.submit(_run_capture_merged, cmd, root) for cmd in commands]
+
+        all_ok = True
+        for combo, cmd, future in zip(build_combos, commands, futures, strict=True):
+            label = combo["label"]
+            log(f"▶ {' '.join(cmd)}  ({label})")
+            try:
+                result = future.result()
+            except FileNotFoundError:
+                print(f"ERROR: could not execute {west_bin}")
+                return False
+
+            kconfig_warnings = 0
+            for line in result.stdout.splitlines():
+                if line.strip().startswith("-- "):
+                    if any(kw in line for kw in cmake_error_phrases):
+                        print(line)
+                elif not any(phrase in line for phrase in noise_phrases):
                     print(line)
-            elif not any(phrase in line for phrase in noise_phrases):
-                print(line)
-                if line.strip().lower().startswith("warning:"):
-                    kconfig_warnings += 1
+                    if line.strip().lower().startswith("warning:"):
+                        kconfig_warnings += 1
 
-        if kconfig_warnings:
-            print(f"  [{label}] {kconfig_warnings} Kconfig warning(s) — correct the .conf overlays")
-        all_ok = all_ok and result.returncode == 0 and kconfig_warnings == 0
+            if kconfig_warnings:
+                print(f"  [{label}] {kconfig_warnings} Kconfig warning(s) — correct the .conf overlays")
+            all_ok = all_ok and result.returncode == 0 and kconfig_warnings == 0
 
     return all_ok
 

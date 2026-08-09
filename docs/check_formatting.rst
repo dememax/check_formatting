@@ -119,6 +119,14 @@ Registered checkers
      - ``prettier``
      - ``[yaml].globs``
 
+``kconfig``'s configured ``build_combos`` build concurrently in non-verbose
+mode.  Give each combo its own ``-d``/``--build-dir`` in ``args`` if it needs
+isolated build state — ``west build`` already supports this directly through
+``args``; no ``check_formatting``-specific configuration exists or is needed
+for it.  Combos sharing a build directory will race.  ``--verbose`` stays
+sequential, one combo at a time, so its live-streamed output is never
+interleaved.
+
 Checker names normally describe a file domain.  ``mypy`` and ``clang-tidy``
 are named for their backends because they add deeper analysis to domains that
 already have primary ``python`` and ``cpp`` format/lint checkers.

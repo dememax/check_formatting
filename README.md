@@ -149,6 +149,13 @@ RST is the exception: `check_rst` owns its native selection, so invoke
 | `shell` | shellcheck | `[shell].globs` |
 | `yaml` | prettier | `[yaml].globs` |
 
+`kconfig`'s configured `build_combos` build concurrently (non-verbose mode)
+— give each combo its own `-d`/`--build-dir` in `args` if it needs isolated
+build state; `west build` already supports this directly, no
+`check_formatting`-specific configuration exists or is needed for it.
+Combos sharing a build directory will race. `--verbose` stays sequential,
+one combo at a time, so its live-streamed output is never interleaved.
+
 A category name names the **file domain** it covers (`cpp`, `web`,
 `python`, ...) — except where a domain already has a primary
 formatter/linter and a second, deeper-analysis tool exists for the *same*
