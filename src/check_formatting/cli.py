@@ -913,53 +913,106 @@ def _detect_changed_files(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 # Matches a unified-diff hunk header, e.g. "@@ -3 +3 @@" or "@@ -2,0 +3,2 @@".
-# Only the new-file side (after "+") is captured — see _git_diff_hunk_ranges.
+# Only the new-file side (after "+") is captured — see _batched_git_diff_hunk_ranges.
 _HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
+# Matches a unified-diff "new file" header, e.g. "+++ b/src/foo.py" or, for a
+# file deleted entirely, "+++ /dev/null" — see _parse_git_diff_hunks_by_relpath.
+_DIFF_NEW_FILE_HEADER_RE = re.compile(r"^\+\+\+ (?:b/(?P<path>.+)|/dev/null)$")
 
-def _git_diff_hunk_ranges(root: pathlib.Path, file: pathlib.Path) -> list[tuple[int, int]] | None:
-    """Return 1-indexed ``(start, end)`` line ranges changed in *file*'s current version.
+
+def _parse_git_diff_hunks_by_relpath(diff_output: str) -> dict[str, list[tuple[int, int]]]:
+    """Parse a (possibly multi-file) ``git diff -U0``'s stdout into 1-indexed
+    ``(start, end)`` new-file line ranges, keyed by each file's path exactly
+    as printed after ``+++ b/``.
+
+    A hunk whose new-file line count is zero (a pure deletion) contributes no
+    range, and a file deleted entirely (``+++ /dev/null``) contributes no
+    entry at all — nothing was added there for a line-range-based formatter
+    to reformat, the same rule the single-file lookup already applied.
+    """
+    ranges_by_path: dict[str, list[tuple[int, int]]] = {}
+    current: list[tuple[int, int]] | None = None
+    for line in diff_output.splitlines():
+        header = _DIFF_NEW_FILE_HEADER_RE.match(line)
+        if header is not None:
+            path = header.group("path")
+            current = ranges_by_path.setdefault(path, []) if path is not None else None
+            continue
+        if current is None:
+            continue
+        hunk = _HUNK_HEADER_RE.match(line)
+        if not hunk:
+            continue
+        new_start = int(hunk.group(1))
+        new_count = int(hunk.group(2)) if hunk.group(2) is not None else 1
+        if new_count == 0:
+            continue
+        current.append((new_start, new_start + new_count - 1))
+    return {path: ranges for path, ranges in ranges_by_path.items() if ranges}
+
+
+def _batched_git_diff_hunk_ranges(
+    root: pathlib.Path, files: Sequence[pathlib.Path]
+) -> dict[pathlib.Path, list[tuple[int, int]] | None]:
+    """Return each of *files*'s 1-indexed ``(start, end)`` changed-line ranges,
+    from a single ``git diff -U0 HEAD`` covering all of them at once.
 
     Backs the optional "git-scoped fix" contract (see :func:`_check_cpp`): a
     checker whose backend accepts a native line-range flag (clang-format's
     ``-lines=<start>:<end>``) can restrict a ``--fix`` — and, to keep
     check/fix consistent, a ``--check``/``--diff`` — to just the lines that
     actually changed, mirroring check_rst's own bare-mode hunk scoping.
+    Batching one subprocess call across every selected file (instead of one
+    per file, as an earlier version of this function did) matters once a
+    git-scoped run spans many changed files across several checkers.
 
-    Ranges are derived from ``git diff -U0 HEAD -- <file>``'s hunk headers,
-    the same mechanism check_rst itself uses.  A hunk whose new-file line
-    count is zero (a pure deletion) contributes no range — nothing was
-    added there for a line-range-based formatter to reformat.
+    ``--`` scopes the diff to exactly *files* — an unfiltered ``git diff -U0
+    HEAD`` would return hunks for every changed file in the whole
+    repository, not just the ones the caller selected.  An empty *files*
+    means the opposite to git (no ``--`` restriction at all, not "nothing"),
+    so it is handled explicitly before any subprocess is spawned.
+    ``--relative`` makes git report paths relative to *root* (this call's
+    cwd) rather than the repository's top-level directory, so parsed paths
+    line up with *files* even when *root* is a subdirectory of a larger
+    worktree.
 
-    Returns ``None`` — "no hunk restriction available, use whole-file scope
-    instead" — when the diff has no usable hunks: an untracked file (no
+    A file with no usable hunks maps to ``None`` — "no hunk restriction
+    available, use whole-file scope instead": an untracked file (no
     ``HEAD`` baseline, so ``git diff HEAD`` shows nothing for it at all), a
-    file whose only changes were pure deletions, or a ``git`` failure.
-    Unlike :func:`_detect_changed_files`, a git failure here degrades to
-    whole-file scope rather than aborting the whole run — this is an
-    optional safety refinement of an already-selected file, not the
-    file-selection decision itself.
+    file whose only changes were pure deletions, or a ``git`` failure (which
+    maps every file to ``None``).  Unlike :func:`_detect_changed_files`, a
+    git failure here degrades to whole-file scope rather than aborting the
+    whole run — this is an optional safety refinement of an already-selected
+    file set, not the file-selection decision itself.
     """
+    ranges: dict[pathlib.Path, list[tuple[int, int]] | None] = dict.fromkeys(files)
+    if not files:
+        return ranges
     result = subprocess.run(
-        ["git", "diff", "-U0", "HEAD", "--", str(file)],
+        ["git", "diff", "-U0", "--relative", "HEAD", "--", *(str(f) for f in files)],
         cwd=root,
         capture_output=True,
         text=True,
         encoding="utf-8",
     )
     if result.returncode != 0:
-        return None
-    ranges: list[tuple[int, int]] = []
-    for line in result.stdout.splitlines():
-        m = _HUNK_HEADER_RE.match(line)
-        if not m:
-            continue
-        new_start = int(m.group(1))
-        new_count = int(m.group(2)) if m.group(2) is not None else 1
-        if new_count == 0:
-            continue
-        ranges.append((new_start, new_start + new_count - 1))
-    return ranges or None
+        return ranges
+    by_relpath = _parse_git_diff_hunks_by_relpath(result.stdout)
+    by_resolved = {(root / relpath).resolve(): file_ranges for relpath, file_ranges in by_relpath.items()}
+    for f in files:
+        ranges[f] = by_resolved.get(f.resolve())
+    return ranges
+
+
+def _git_diff_hunk_ranges(root: pathlib.Path, file: pathlib.Path) -> list[tuple[int, int]] | None:
+    """Return 1-indexed ``(start, end)`` line ranges changed in *file*'s current version.
+
+    A thin, single-file convenience wrapper over
+    :func:`_batched_git_diff_hunk_ranges` — see its docstring for the full
+    contract. Kept for callers that only ever need one file's ranges.
+    """
+    return _batched_git_diff_hunk_ranges(root, [file])[file]
 
 
 def _resolve_explicit_files(
