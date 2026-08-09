@@ -51,6 +51,27 @@ dir = "docs"
 """
 
 
+def test_config_sections_known_keys_match_expected_schema() -> None:
+    """Characterization test, not a bug fix: pins `_CONFIG_SECTIONS`'s
+    schema so a refactor of how it's built (e.g. deriving it from shared
+    section/key constants instead of hand-listing each frozenset) can't
+    silently drop or rename a checker's known config key.
+    """
+    assert check_formatting._CONFIG_SECTIONS == {
+        "cpp": frozenset({"globs"}),
+        "web": frozenset({"globs"}),
+        "python": frozenset({"dirs"}),
+        "mypy": frozenset({"dirs"}),
+        "json": frozenset({"files"}),
+        "ini": frozenset({"globs"}),
+        "clang_tidy": frozenset({"build_dir"}),
+        "kconfig": frozenset({"build_combos"}),
+        "shell": frozenset({"globs"}),
+        "yaml": frozenset({"globs"}),
+        "rst": frozenset({"dir"}),
+    }
+
+
 def test_missing_config_file_is_hard_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         check_formatting._load_project_config(tmp_path)
