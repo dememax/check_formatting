@@ -27,7 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from check_formatting import __version__
+from check_formatting import __copyright__, __license__, __version__
 
 _SRC_DIR = Path(__file__).parent.parent / "src"
 
@@ -52,7 +52,7 @@ def test_cli_reports_package_version_without_project_config(tmp_path: Path) -> N
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout == f"check_formatting {__version__}\n"
+    assert result.stdout == f"check_formatting {__version__}\n{__copyright__}\nLicense: {__license__}\n"
 
 
 def test_cli_discovers_config_at_invoking_directory_not_script_location(tmp_path: Path) -> None:
