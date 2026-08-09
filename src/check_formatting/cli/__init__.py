@@ -874,7 +874,9 @@ def check_formatting(
 
 def main() -> None:
     """Parse command-line arguments and exit with the aggregate check result."""
-    from check_formatting import __version__
+    from check_formatting import __copyright__, __license__, __version__
+
+    version_banner = f"%(prog)s {__version__}\n{__copyright__}\nLicense: {__license__}"
 
     parser = argparse.ArgumentParser(
         prog="check_formatting",
@@ -885,7 +887,7 @@ def main() -> None:
             "change only what is printed, never the pass/fail verdict."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
+        epilog=f"""\
 Examples:
 
   check_formatting
@@ -961,9 +963,12 @@ Ignore file:
     src/base/          # exclude entire directory
     src/StaticJSON.hpp # exclude specific file
     *.pb.h             # exclude by basename pattern
+
+{__copyright__}
+License: {__license__}
 """,
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--version", action="version", version=version_banner)
     parser.add_argument(
         "--checks",
         nargs="+",
