@@ -17,6 +17,7 @@ invoked.
 from __future__ import annotations
 
 import shutil
+import subprocess
 import tempfile
 from typing import TYPE_CHECKING, Any
 
@@ -77,7 +78,9 @@ def test_check_python_explicit_mode_reports_excluded_count(
     excluded = root / "b.py"
     excluded.write_text("y = 2\n")
 
-    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 0)
+    monkeypatch.setattr(
+        check_formatting, "_run_capture_merged", lambda cmd, cwd: subprocess.CompletedProcess(cmd, 0, stdout="")
+    )
 
     ok = check_formatting._check_python(
         root,

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pathlib
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -301,11 +302,11 @@ def test_check_python_uses_configured_dirs(tmp_path: Path, monkeypatch: pytest.M
     """_check_python must follow a config-sourced dirs list, not the hardcoded ["scripts", "tests"]."""
     captured_cmds: list[list[str]] = []
 
-    def fake_run(cmd: list[str], cwd: Path) -> int:
+    def fake_run_capture_merged(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         captured_cmds.append(cmd)
-        return 0
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
 
-    monkeypatch.setattr(check_formatting, "_run", fake_run)
+    monkeypatch.setattr(check_formatting, "_run_capture_merged", fake_run_capture_merged)
 
     ok = check_formatting._check_python(tmp_path, dirs=["source", "spec"])
 
@@ -383,7 +384,12 @@ def test_python_checkers_restrict_explicit_files_to_configured_dirs(
         captured.append(cmd)
         return 0
 
+    def fake_run_capture_merged(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        captured.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
     monkeypatch.setattr(check_formatting, "_run", fake_run)
+    monkeypatch.setattr(check_formatting, "_run_capture_merged", fake_run_capture_merged)
     monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(pathlib.Path, "exists", lambda self: False)
 

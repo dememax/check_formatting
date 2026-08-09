@@ -402,6 +402,7 @@ Callable as a library (from another script in ``scripts/``)::
 """
 
 import argparse
+import concurrent.futures
 import contextlib
 import dataclasses
 import difflib
@@ -1878,6 +1879,36 @@ def _resolve_python_targets(
     return list(dirs), f"({', '.join(dirs)})"
 
 
+def _run_two_concurrently(
+    cmd1: list[str],
+    cmd2: list[str],
+    cwd: pathlib.Path,
+    log: Callable[..., None],
+    banner1: str,
+    banner2: str,
+) -> tuple[int, int]:
+    """Run *cmd1* and *cmd2* concurrently, each capturing merged stdout+stderr
+    (via :func:`_run_capture_merged`) rather than streaming live like
+    :func:`_run` — running two live-streaming subprocesses at once would
+    interleave their output unpredictably. Both are submitted before either
+    banner is printed, so the actual work overlaps (wall time roughly
+    ``max(cmd1, cmd2)`` instead of the sum); each command's own banner and
+    captured output are still printed in (*cmd1*, *cmd2*) order once ready,
+    exactly the shape a sequential run would have produced.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        future1 = pool.submit(_run_capture_merged, cmd1, cwd)
+        future2 = pool.submit(_run_capture_merged, cmd2, cwd)
+        log(banner1)
+        result1 = future1.result()
+        sys.stdout.write(result1.stdout)
+        log()
+        log(banner2)
+        result2 = future2.result()
+        sys.stdout.write(result2.stdout)
+    return result1.returncode, result2.returncode
+
+
 def _check_python(
     root: pathlib.Path,
     fix: bool = False,
@@ -1897,7 +1928,12 @@ def _check_python(
     Diff mode:    ``ruff format --diff`` (native unified diff) + ``ruff check``.
     Fix mode:     ``ruff format`` + ``ruff check --fix`` — rewrites in-place.
 
-    Both sub-commands must exit 0 for the check to pass.
+    Both sub-commands must exit 0 for the check to pass.  The three
+    read-only modes run both sub-commands concurrently (see
+    :func:`_run_two_concurrently`) since neither depends on the other's
+    output.  Fix mode keeps them sequential, live-streamed via :func:`_run`
+    — ``ruff check --fix`` must see the content ``ruff format`` just wrote,
+    a genuine data dependency, not just historical ordering.
 
     Note: ``.formatting-ignore`` exclusions are not applied for ruff when
     operating on directories (``scripts/`` and ``tests/``).  Use
@@ -1916,25 +1952,35 @@ def _check_python(
         log()
         log(f"▶ ruff check --fix  {targets_label}")
         lint_rc = _run(["ruff", "check", "--fix", *targets], cwd=root)
-    elif diff:
-        log(f"▶ ruff format --diff  {targets_label}")
-        fmt_rc = _run(["ruff", "format", "--diff", *targets], cwd=root)
-        log()
-        log(f"▶ ruff check  {targets_label}")
-        lint_rc = _run(["ruff", "check", *targets], cwd=root)
+        return fmt_rc == 0 and lint_rc == 0
+    if diff:
+        fmt_rc, lint_rc = _run_two_concurrently(
+            ["ruff", "format", "--diff", *targets],
+            ["ruff", "check", *targets],
+            root,
+            log,
+            f"▶ ruff format --diff  {targets_label}",
+            f"▶ ruff check  {targets_label}",
+        )
     elif verbose:
         _print_tool_info("ruff", cwd=root)
-        log(f"▶ ruff format --check  {targets_label}")
-        fmt_rc = _run(["ruff", "format", "--check", *targets], cwd=root)
-        log()
-        log(f"▶ ruff check --output-format full  {targets_label}")
-        lint_rc = _run(["ruff", "check", "--output-format", "full", *targets], cwd=root)
+        fmt_rc, lint_rc = _run_two_concurrently(
+            ["ruff", "format", "--check", *targets],
+            ["ruff", "check", "--output-format", "full", *targets],
+            root,
+            log,
+            f"▶ ruff format --check  {targets_label}",
+            f"▶ ruff check --output-format full  {targets_label}",
+        )
     else:
-        log(f"▶ ruff format --check  {targets_label}")
-        fmt_rc = _run(["ruff", "format", "--check", *targets], cwd=root)
-        log()
-        log(f"▶ ruff check  {targets_label}")
-        lint_rc = _run(["ruff", "check", *targets], cwd=root)
+        fmt_rc, lint_rc = _run_two_concurrently(
+            ["ruff", "format", "--check", *targets],
+            ["ruff", "check", *targets],
+            root,
+            log,
+            f"▶ ruff format --check  {targets_label}",
+            f"▶ ruff check  {targets_label}",
+        )
     return fmt_rc == 0 and lint_rc == 0
 
 
