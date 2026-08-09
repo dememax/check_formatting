@@ -162,6 +162,27 @@ mode flag is supplied.
      - Apply supported formatter and linter fixes in place.  Report-only
        checkers still validate but do not modify files.
 
+=============================
+Concurrent checker dispatch
+=============================
+
+Every selected checker runs concurrently, regardless of ``--fail-fast``.
+Nothing is printed incrementally while checkers are still running — all
+output (banners, each checker's own findings, the summary table or
+``--json`` payload) is produced together only once every checker has
+finished, in ``--checks`` order, never completion order.  This applies
+even when only one checker is selected: there is no special case for it.
+
+``--fail-fast``
+   Stops the *report* at the first checker (in ``--checks`` order) that
+   reports a problem — no summary table (or, under ``--json``, no further
+   ``results``/``summary`` entries) beyond that point.  Every checker
+   still runs to completion regardless: dispatch is unconditionally
+   concurrent, threads cannot be safely killed mid-flight, and by the
+   time a failure is known here the remaining checkers are typically
+   already running.  This does not save wall-clock time — it only
+   shortens what gets printed or returned.
+
 =================
 Output controls
 =================
@@ -340,7 +361,7 @@ Usage
    # Select checkers explicitly
    check_formatting --checks cpp meson
 
-   # Stop after the first failed checker
+   # Shorten the report at the first failed checker (every checker still runs)
    check_formatting --fail-fast
 
    # Show maximum backend diagnostics

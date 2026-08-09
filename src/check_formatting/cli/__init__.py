@@ -578,8 +578,14 @@ def check_formatting(
         default ``checks`` already includes ``cmake``/``kconfig`` (e.g. a
         Zephyr project) would have those run by default there instead.
     fail_fast : bool
-        Stop at the first checker that reports a problem without running
-        the remaining ones.  No summary table is printed.
+        Stop *reporting* at the first checker that reports a problem, in
+        *checks* list order — no summary table (or, under *as_json*, no
+        further ``results``/``summary`` entries) beyond that point.  Every
+        checker still runs to completion regardless: dispatch is
+        unconditionally concurrent, threads cannot be safely killed
+        mid-flight, and by the time a failure is known here the remaining
+        checkers are typically already running.  This does not save
+        wall-clock time — it only shortens what gets printed/returned.
     fix : bool
         Run each formatter in write/inplace mode.  Files are modified.
         Mutually exclusive with *diff* and *verbose*.
@@ -625,14 +631,14 @@ def check_formatting(
         banners/table/summary, and nothing else — this script's own chrome
         is suppressed exactly as under *quiet* (forced on internally), and
         each checker's real output (including the wrapped tool's own
-        stdout, captured via redirecting stdout for the duration of that
-        checker's call) is embedded as a string field instead of being
-        printed directly, so no information is lost relative to a normal
-        run.  Payload shape: ``{"config_source": str, "mode": str,
-        "checks": [str, ...], "results": {name: {"label": str, "ok": bool,
-        "output": str}}, "summary": {"total": int, "passed": int, "failed":
-        int}, "overall_ok": bool}``.  Never changes the return value or
-        exit code.
+        stdout, captured for the duration of that checker's run) is
+        embedded as a string field instead of being printed directly, so
+        no information is lost relative to a normal run.  Payload shape:
+        ``{"config_source": str, "mode": str, "checks": [str, ...],
+        "results": {name: {"label": str, "ok": bool, "output": str}},
+        "summary": {"total": int, "passed": int, "failed": int},
+        "overall_ok": bool}``.  Never changes the return value or exit
+        code.
     exclude_patterns : Sequence[str]
         Additional patterns to exclude from this run only, on top of
         ``.formatting-ignore`` (and, for the clang-tidy checker,
@@ -654,6 +660,15 @@ def check_formatting(
         if they pass a *file_args*-equivalent list obtained the same way.
         Keyword-only so adding it cannot shift the public API's pre-existing
         positional ``quiet``, ``as_json``, and ``exclude_patterns`` arguments.
+
+    Every selected checker runs concurrently, regardless of *fail_fast* —
+    see its own entry above for what that flag actually controls now.
+    Nothing is printed incrementally while checkers are still running: all
+    output (banners, each checker's own findings, the summary table or
+    JSON payload) is produced together only once every checker has
+    finished, in *checks* list order, never completion order.  This
+    applies even to a single selected checker, deliberately: there is no
+    special case for "only one checker running".
 
     Returns
     -------
@@ -911,7 +926,11 @@ Examples:
       Fix only C++ and Meson build files.
 
   check_formatting --fail-fast
-      Stop at the first formatting check that reports violations.
+      Shorten the report to stop at the first checker (in --checks order)
+      that reports violations — no summary table beyond that point. Every
+      checker still runs to completion regardless: checks always dispatch
+      concurrently, so this does not save any wall-clock time, only
+      output.
 
   check_formatting src/Foo.cpp www/index.html
       Check only those two files (each checker filters to its own type).
@@ -1012,8 +1031,11 @@ Ignore file:
         "--fail-fast",
         action="store_true",
         help=(
-            "Stop after the first checker that reports a problem.  "
-            "By default all checks are attempted and a summary table is printed."
+            "Stop the report at the first checker (in --checks order) that reports "
+            "a problem — no summary table beyond that point.  Every checker still runs "
+            "to completion regardless: checks always dispatch concurrently, so this saves "
+            "no wall-clock time, only shortens what gets printed.  By default (this flag "
+            "omitted) every checker's result is included and a summary table is printed."
         ),
     )
     parser.add_argument(

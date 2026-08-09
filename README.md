@@ -194,6 +194,14 @@ Output verbosity is a separate, combinable axis:
 
 Neither `--quiet` nor `--json` changes the pass/fail return value or exit code.
 
+Every selected checker runs concurrently, so nothing prints incrementally —
+all output appears together, in `--checks` order, once every checker has
+finished. `--fail-fast` shortens the *report* to stop at the first checker
+(list order) that reports a problem; every checker still runs to completion
+regardless, so it saves no wall-clock time, only output. See
+[docs/check_formatting.rst](docs/check_formatting.rst)'s "Concurrent checker
+dispatch" section for the full rationale.
+
 ## File-selection scope
 
 | Invocation | Scope |
