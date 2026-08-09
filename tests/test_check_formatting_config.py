@@ -348,6 +348,23 @@ def test_checker_kwargs_use_mypy_specific_dirs_when_configured(tmp_path: Path) -
     assert check_formatting._checker_kwargs("mypy", config) == {"dirs": ["bin/std.py", "tests"]}
 
 
+def test_every_registered_checker_has_kwargs_and_fix_command_coverage(tmp_path: Path) -> None:
+    """Every name in _CHECKERS must resolve both a kwargs dict and a fix
+    command without error — guards against a future checker being added to
+    _CHECKERS but forgotten in its own kwargs/fix-command wiring. Today's
+    suite otherwise has no direct _checker_kwargs/_fix_command coverage at
+    all for cpp, meson, cmake, kconfig, or shell — this closes that gap."""
+    (tmp_path / ".check_formatting.toml").write_text('checks = ["cpp"]\n')
+    config = check_formatting._load_project_config(tmp_path)
+
+    for name in check_formatting._CHECKERS:
+        kwargs = check_formatting._checker_kwargs(name, config, git_auto_detected=True)
+        assert isinstance(kwargs, dict)
+        command = check_formatting._fix_command(name, config, git_auto_detected=True)
+        assert isinstance(command, str)
+        assert command
+
+
 @pytest.mark.parametrize("checker", ["python", "mypy"])
 def test_python_checkers_restrict_explicit_files_to_configured_dirs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, checker: str
