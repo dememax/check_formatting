@@ -16,16 +16,16 @@ existed), and left alone otherwise.
 
 from __future__ import annotations
 
+import pathlib
 import shutil
 from typing import TYPE_CHECKING
-
-import pytest
 
 from check_formatting import cli as check_formatting
 
 if TYPE_CHECKING:
-    import pathlib
     from pathlib import Path
+
+    import pytest
 
 _MARKER = check_formatting._MYPY_CACHE_VERSION_MARKER
 
@@ -73,9 +73,7 @@ def test_mypy_cache_wiped_when_marker_version_mismatches(tmp_path: Path, monkeyp
     assert (cache_dir / _MARKER).read_text(encoding="utf-8") == "mypy 1.2.3"
 
 
-def test_mypy_cache_marker_write_failure_does_not_raise(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_mypy_cache_marker_write_failure_does_not_raise(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A read-only root (or any mkdir/write failure) must not crash the check —
     it just forfeits the cache-marker optimization for the next invocation."""
     _mock_version(monkeypatch, "mypy 1.2.3")
@@ -83,7 +81,7 @@ def test_mypy_cache_marker_write_failure_does_not_raise(
     def raising_mkdir(self: pathlib.Path, *args: object, **kwargs: object) -> None:
         raise PermissionError("read-only filesystem")
 
-    monkeypatch.setattr(check_formatting.pathlib.Path, "mkdir", raising_mkdir)
+    monkeypatch.setattr(pathlib.Path, "mkdir", raising_mkdir)
 
     check_formatting._invalidate_mypy_cache_if_version_changed(tmp_path, tmp_path / "mypy")
 
@@ -93,9 +91,7 @@ def test_check_mypy_writes_marker_before_running_mypy(tmp_path: Path, monkeypatc
     runs, so a crash mid-run can't leave a stale marker claiming a clean,
     matching cache for a run that never finished."""
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/mypy")
-    monkeypatch.setattr(
-        check_formatting, "_tool_version_string", lambda binary, cwd, version_args=None: "mypy 1.2.3"
-    )
+    monkeypatch.setattr(check_formatting, "_tool_version_string", lambda binary, cwd, version_args=None: "mypy 1.2.3")
 
     seen_marker_content: list[str] = []
 

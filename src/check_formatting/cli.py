@@ -681,14 +681,22 @@ def _run_capture_merged(cmd: list[str], cwd: pathlib.Path) -> subprocess.Complet
     return subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
 
 
-def _print_tool_info(
+def _tool_version_string(
     binary: str | pathlib.Path,
     cwd: pathlib.Path,
     version_args: list[str] | None = None,
-) -> None:
-    """Print the resolved binary path and version string in verbose mode."""
+) -> str | None:
+    """Return *binary*'s version-ish string: the first line of stdout+stderr
+    from running ``<binary> --version`` (or *version_args*).
+
+    Returns ``None`` when the subprocess couldn't even be run (missing
+    binary, not executable, timed out) — distinct from ``""``, returned when
+    the tool ran but printed nothing to either stream. Shared by
+    :func:`_print_tool_info`'s verbose-mode banner and the mypy checker's
+    version-gated cache invalidation, which both need this same lookup —
+    one for display, one for comparison.
+    """
     binary_str = str(binary)
-    resolved = binary_str if pathlib.Path(binary_str).is_absolute() else shutil.which(binary_str) or binary_str
     if version_args is None:
         version_args = ["--version"]
     try:
@@ -700,10 +708,22 @@ def _print_tool_info(
             encoding="utf-8",
             timeout=10,
         )
-        raw = (result.stdout + result.stderr).strip()
-        version_line = raw.splitlines()[0] if raw else "(unknown)"
     except FileNotFoundError, OSError, subprocess.TimeoutExpired:
-        version_line = "(unavailable)"
+        return None
+    raw = (result.stdout + result.stderr).strip()
+    return raw.splitlines()[0] if raw else ""
+
+
+def _print_tool_info(
+    binary: str | pathlib.Path,
+    cwd: pathlib.Path,
+    version_args: list[str] | None = None,
+) -> None:
+    """Print the resolved binary path and version string in verbose mode."""
+    binary_str = str(binary)
+    resolved = binary_str if pathlib.Path(binary_str).is_absolute() else shutil.which(binary_str) or binary_str
+    version = _tool_version_string(binary, cwd, version_args)
+    version_line = "(unavailable)" if version is None else (version or "(unknown)")
     print(f"  Binary:  {resolved}")
     print(f"  Version: {version_line}")
 
@@ -2101,6 +2121,48 @@ def _check_yaml(
     )
 
 
+# Lives inside .mypy_cache/ itself, not alongside it — so mypy's own cache
+# clearing, or a user's `rm -rf .mypy_cache`, naturally clears this marker
+# too, and there is no separate piece of state that can go stale on its own.
+_MYPY_CACHE_VERSION_MARKER = ".check_formatting_mypy_version"
+
+
+def _invalidate_mypy_cache_if_version_changed(root: pathlib.Path, mypy_bin: pathlib.Path) -> None:
+    """Wipe ``.mypy_cache/`` only when the resolved mypy's version differs
+    from the version recorded there last time — not on every invocation.
+
+    mypy's incremental cache format is version-dependent: reusing a cache
+    written by a different mypy version than the one about to run could
+    silently produce wrong (missing or spurious) results instead of a clean
+    full recheck — the one guarantee wiping the cache exists to preserve.
+    No marker present (first run, or a cache that predates this check) is
+    treated as a mismatch: wipe once, the safe default.
+
+    The marker is (re)written here, before mypy actually runs, so it always
+    reflects the version about to run rather than the version that last
+    completed — a crash mid-run can never leave a stale marker claiming a
+    clean, matching cache for a run that never finished. A failed marker
+    write (e.g. a read-only root) is swallowed: the check still runs, it
+    just forfeits this optimization for the next invocation.
+    """
+    cache_dir = root / ".mypy_cache"
+    marker = cache_dir / _MYPY_CACHE_VERSION_MARKER
+    current_version = _tool_version_string(mypy_bin, root) or "(unknown)"
+    previous_version = None
+    if marker.is_file():
+        try:
+            previous_version = marker.read_text(encoding="utf-8")
+        except OSError:
+            previous_version = None
+    if cache_dir.exists() and previous_version != current_version:
+        shutil.rmtree(cache_dir)
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        marker.write_text(current_version, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _check_mypy(
     root: pathlib.Path,
     fix: bool = False,
@@ -2131,19 +2193,12 @@ def _check_mypy(
         return True
     targets, targets_label = result
     _log_analysis_only("mypy", "type-check", fix, diff, log)
-    # Wiped unconditionally: mypy is resolved from PATH, so a machine running
-    # a different mypy version than whatever last wrote this
-    # cache could silently produce wrong (missing or spurious) results if the
-    # (version-dependent) incremental cache format were reused across a
-    # version change, instead of a clean full recheck.
-    cache_dir = root / ".mypy_cache"
-    if cache_dir.exists():
-        shutil.rmtree(cache_dir)
     found = shutil.which("mypy")
     mypy_bin = pathlib.Path(found) if found else None
     if mypy_bin is None:
         print("  ERROR: mypy not found on PATH — install it via the system package manager (e.g. apt install mypy)")
         return False
+    _invalidate_mypy_cache_if_version_changed(root, mypy_bin)
     cmd = [str(mypy_bin)]
     if verbose:
         _print_tool_info(mypy_bin, cwd=root)
