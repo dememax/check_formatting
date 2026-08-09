@@ -25,6 +25,7 @@ versus batched dispatch used by ``web``, ``json``, ``ini``, and ``yaml``.
 
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -221,9 +222,60 @@ def test_fix_prettier_files_git_scope_runs_each_file_and_aggregates_failures(
     )
 
     assert ok is False
-    assert calls == files
+    # Files run concurrently now — the order calls *start* in isn't
+    # guaranteed to match submission order, only the order results are
+    # consumed/printed in (asserted below) is.
+    assert sorted(calls, key=str) == sorted(files, key=str)
     assert any("first.json: git-scoped merge" in message for message in messages)
     assert any("second.json: prettier exited 2" in message for message in messages)
+
+
+def test_fix_prettier_files_git_scope_runs_files_concurrently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Proves genuine concurrent execution across files: both
+    _best_effort_prettier_fix calls must be in flight at the same time to
+    pass through the barrier — a sequential implementation would deadlock
+    here (only one file ever in flight at a time) rather than complete
+    quickly. Unlike the ruff/kconfig parallelization, this pipeline already
+    used capture-based subprocess calls throughout (no _run live-streaming
+    anywhere in it), so there's no output-interleaving risk to design
+    around here — only the ordering of printed results, covered above."""
+    files = [tmp_path / "first.json", tmp_path / "second.json"]
+    for f in files:
+        f.write_text("{}\n")
+    barrier = threading.Barrier(2, timeout=5)
+
+    def fake_best_effort(file: Path, root: Path, ranges: list[tuple[int, int]] | None) -> tuple[bool, str]:
+        barrier.wait()
+        return True, "ok"
+
+    monkeypatch.setattr(check_formatting, "_best_effort_prettier_fix", fake_best_effort)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: dict.fromkeys(files))
+
+    ok = check_formatting._fix_prettier_files(
+        files, tmp_path, git_auto_detected=True, label="(2 file(s))", log=lambda _message: None
+    )
+
+    assert ok is True
+
+
+def test_report_prettier_files_git_scoped_runs_files_concurrently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = [tmp_path / "first.json", tmp_path / "second.json"]
+    for f in files:
+        f.write_text("{}\n")
+    barrier = threading.Barrier(2, timeout=5)
+
+    def fake_target(file: Path, root: Path, ranges: list[tuple[int, int]] | None) -> tuple[bool, str, str]:
+        barrier.wait()
+        return True, "{}\n", "ok"
+
+    monkeypatch.setattr(check_formatting, "_best_effort_prettier_target", fake_target)
+    monkeypatch.setattr(check_formatting, "_batched_git_diff_hunk_ranges", lambda root, files: dict.fromkeys(files))
+
+    ok = check_formatting._report_prettier_files_git_scoped(files, tmp_path, show_diff=False, log=lambda _message: None)
+
+    assert ok is True
 
 
 def test_fix_prettier_files_non_git_scope_stays_batched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
