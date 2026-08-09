@@ -1222,14 +1222,15 @@ def _select_explicit(
     return kept, excluded
 
 
-def _lines_flags(root: pathlib.Path, file: pathlib.Path) -> list[str]:
-    """Return clang-format ``-lines=<start>:<end>`` flags for *file*'s changed hunks.
+def _lines_flags(ranges: list[tuple[int, int]] | None) -> list[str]:
+    """Return clang-format ``-lines=<start>:<end>`` flags for precomputed *ranges*.
 
-    Empty when :func:`_git_diff_hunk_ranges` finds no derivable ranges (an
-    untracked file, a pure-deletion-only diff, or a git failure) — the
-    caller then falls back to whole-file scope, exactly today's behavior.
+    Empty when *ranges* is ``None`` — no derivable hunks (an untracked
+    file, a pure-deletion-only diff, or a git failure) — the caller then
+    falls back to whole-file scope, exactly today's behavior. *ranges*
+    comes from :func:`_batched_git_diff_hunk_ranges`, computed once per
+    selected file set rather than looked up here per file.
     """
-    ranges = _git_diff_hunk_ranges(root, file)
     if ranges is None:
         return []
     return [f"-lines={start}:{end}" for start, end in ranges]
@@ -1277,8 +1278,14 @@ def _merge_within_hunk_ranges(original: str, formatted: str, ranges: Sequence[tu
     return "".join(merged)
 
 
-def _best_effort_prettier_target(file: pathlib.Path, root: pathlib.Path) -> tuple[bool, str, str]:
+def _best_effort_prettier_target(
+    file: pathlib.Path, root: pathlib.Path, ranges: list[tuple[int, int]] | None
+) -> tuple[bool, str, str]:
     """Compute what a best-effort git-scoped prettier fix would write for *file*.
+
+    *ranges* is *file*'s precomputed hunk ranges from
+    :func:`_batched_git_diff_hunk_ranges` — computed once per selected file
+    set by the caller, not looked up here per file.
 
     Shared by :func:`_best_effort_prettier_fix` (which writes the result)
     and the ``web`` checker's check/verbose/diff modes (which only need to
@@ -1327,7 +1334,6 @@ def _best_effort_prettier_target(file: pathlib.Path, root: pathlib.Path) -> tupl
     if original == formatted:
         return True, formatted, "already compliant"
 
-    ranges = _git_diff_hunk_ranges(root, file)
     if ranges is None:
         return True, formatted, "whole-file fix (no git hunk info)"
 
@@ -1345,17 +1351,19 @@ def _best_effort_prettier_target(file: pathlib.Path, root: pathlib.Path) -> tupl
     return True, formatted, "whole-file fallback (candidate canonicalized differently)"
 
 
-def _best_effort_prettier_fix(file: pathlib.Path, root: pathlib.Path) -> tuple[bool, str]:
+def _best_effort_prettier_fix(
+    file: pathlib.Path, root: pathlib.Path, ranges: list[tuple[int, int]] | None
+) -> tuple[bool, str]:
     """Attempt a hunk-scoped prettier fix for *file*, writing the result in-place.
 
     Delegates the actual scoped-merge-vs-whole-file decision entirely to
     :func:`_best_effort_prettier_target` (see its docstring for the full
-    mechanism) and writes *target* when it differs from the file's current
-    content.  Returns ``(ok, status)`` — see
+    mechanism, including *ranges*) and writes *target* when it differs from
+    the file's current content.  Returns ``(ok, status)`` — see
     :func:`_best_effort_prettier_target` for what *status* can be.
     """
     original = file.read_text(encoding="utf-8")
-    ok, target, status = _best_effort_prettier_target(file, root)
+    ok, target, status = _best_effort_prettier_target(file, root, ranges)
     if not ok:
         return False, status
     if target != original:
@@ -1382,9 +1390,10 @@ def _fix_prettier_files(
     """
     if git_auto_detected:
         log(f"▶ npx prettier --write (best-effort git-scoped)  {label}")
+        hunk_ranges = _batched_git_diff_hunk_ranges(root, files)
         ok = True
         for file in files:
-            file_ok, status = _best_effort_prettier_fix(file, root)
+            file_ok, status = _best_effort_prettier_fix(file, root, hunk_ranges[file])
             log(f"  {file.relative_to(root)}: {status}")
             ok = file_ok and ok
         return ok
@@ -1413,10 +1422,11 @@ def _report_prettier_files_git_scoped(
     each file that differs, via :func:`_show_diff`; otherwise only the
     per-file status line is logged and the boolean verdict is computed.
     """
+    hunk_ranges = _batched_git_diff_hunk_ranges(root, files)
     any_violation = False
     for file in files:
         original = file.read_text(encoding="utf-8")
-        ok, target, status = _best_effort_prettier_target(file, root)
+        ok, target, status = _best_effort_prettier_target(file, root, hunk_ranges[file])
         if not ok:
             print(f"ERROR: {status} on {file.name}")
             return False
@@ -1505,29 +1515,32 @@ def _check_cpp(
     if fix:
         if git_auto_detected:
             log(f"▶ clang-format -i (git-scoped)  {label}")
+            hunk_ranges = _batched_git_diff_hunk_ranges(root, files)
             ok = True
             for f in files:
-                cmd = ["clang-format", "-i", *_lines_flags(root, f), str(f)]
+                cmd = ["clang-format", "-i", *_lines_flags(hunk_ranges[f]), str(f)]
                 ok = (_run(cmd, cwd=root) == 0) and ok
             return ok
         log(f"▶ clang-format -i  {label}")
         return _run(["clang-format", "-i"] + [str(f) for f in files], cwd=root) == 0
     if diff:
         log(f"▶ clang-format (diff{', git-scoped' if git_auto_detected else ''})  {label}")
+        hunk_ranges = _batched_git_diff_hunk_ranges(root, files) if git_auto_detected else {}
         return _diff_files_by_command(
             files,
             root,
             "clang-format",
-            lambda f: ["clang-format", *(_lines_flags(root, f) if git_auto_detected else []), str(f)],
+            lambda f: ["clang-format", *(_lines_flags(hunk_ranges[f]) if git_auto_detected else []), str(f)],
         )
     # check and verbose: clang-format exposes no extra diagnostic flags
     if verbose:
         _print_tool_info("clang-format", cwd=root)
     if git_auto_detected:
         log(f"▶ clang-format --dry-run --Werror (git-scoped)  {label}")
+        hunk_ranges = _batched_git_diff_hunk_ranges(root, files)
         rc = 0
         for f in files:
-            rc |= _run(["clang-format", *_lines_flags(root, f), "--dry-run", "--Werror", str(f)], cwd=root)
+            rc |= _run(["clang-format", *_lines_flags(hunk_ranges[f]), "--dry-run", "--Werror", str(f)], cwd=root)
         return rc == 0
     log(f"▶ clang-format --dry-run --Werror  {label}")
     return (

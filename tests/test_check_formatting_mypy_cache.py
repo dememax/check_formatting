@@ -30,6 +30,17 @@ if TYPE_CHECKING:
 _MARKER = check_formatting._MYPY_CACHE_VERSION_MARKER
 
 
+def test_tool_version_string_returns_none_on_missing_binary(tmp_path: Path) -> None:
+    """The real (unmocked) exception-handling path: a binary that can't even be
+    executed returns None, distinct from "" (ran but printed nothing) — the
+    distinction _invalidate_mypy_cache_if_version_changed relies on to treat
+    both as a stable, comparable "(unknown)" version without conflating a
+    genuine missing-tool case with a real empty-output one at this layer."""
+    result = check_formatting._tool_version_string(tmp_path / "definitely-not-a-real-binary", tmp_path)
+
+    assert result is None
+
+
 def _mock_version(monkeypatch: pytest.MonkeyPatch, version: str) -> None:
     monkeypatch.setattr(check_formatting, "_tool_version_string", lambda binary, cwd, version_args=None: version)
 
