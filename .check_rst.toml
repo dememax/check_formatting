@@ -1,0 +1,5 @@
+# Copyright (C) 2026 Maxime P. DEMENTYEV
+# SPDX-License-Identifier: GPL-3.0-only
+# Per-repo check_rst configuration — check_formatting project
+sphinx-src = "docs"
+build-dir = "/tmp/check-formatting-sphinx-build"
