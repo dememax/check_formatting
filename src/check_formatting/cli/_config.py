@@ -8,6 +8,7 @@ from.
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import sys
 import tomllib
@@ -141,10 +142,13 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
 
 
 def _validate_check_names(checks: Sequence[str], where: str) -> None:
-    """Reject checker names that are not registered in :data:`_CHECKERS`."""
+    """Reject unknown or duplicate checker names before concurrent dispatch."""
     unknown = sorted(set(checks) - cli._CHECKERS.keys())
     if unknown:
         _config_error(f"{where}: unknown checker(s): {', '.join(unknown)}")
+    duplicates = sorted(name for name, count in collections.Counter(checks).items() if count > 1)
+    if duplicates:
+        _config_error(f"{where}: duplicate checker(s): {', '.join(duplicates)}")
 
 
 def _optional_section[T](

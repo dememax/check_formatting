@@ -45,6 +45,10 @@ For development, use an editable installation from the repository root::
 
 The console entry point and ``python3.14 -m check_formatting`` are equivalent.
 
+The setuptools build hook repopulates the staged ``check_formatting`` package
+from source on every build.  Reusing a checkout's ``build/`` directory
+therefore cannot leak a deleted module into a later wheel.
+
 Only backends enabled by the consuming project need to be installed.  Backend
 executables are always resolved from ``PATH``; a project-local virtual
 environment is not consulted implicitly.
@@ -68,9 +72,10 @@ A minimal configuration is::
    dirs = ["src", "tests"]
 
 The configuration is a declaration, not auto-detection.  A missing file,
-malformed TOML, an unknown checker or key, a section of the wrong type, or a
-wrongly typed value is a hard error.  A valid section for a checker not listed
-in ``checks`` is permitted and remains available through ``--checks``.
+malformed TOML, an unknown or duplicate checker name, an unknown key, a
+section of the wrong type, or a wrongly typed value is a hard error.  A valid
+section for a checker not listed in ``checks`` is permitted and remains
+available through ``--checks``.
 
 *********************
 Registered checkers

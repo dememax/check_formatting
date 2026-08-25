@@ -132,12 +132,23 @@ def _run_capture_merged(cmd: list[str], cwd: pathlib.Path) -> subprocess.Complet
     to the terminal like :func:`_run`, and not kept separate like
     :func:`_fmt_stdout` — used where output must be scanned/filtered
     line-by-line before any of it is shown (the kconfig checker's per-combo
-    warning-count scan over west/CMake's combined output). Raises
-    ``FileNotFoundError`` the same way ``subprocess.run`` itself does; callers
-    that need a missing-binary message of their own catch it directly, the
-    same convention :func:`_run`/:func:`_fmt_stdout` each use internally.
+    warning-count scan over west/CMake's combined output). A missing command
+    is represented by the conventional exit code 127 and a captured error
+    line, matching :func:`_run`/:func:`_fmt_stdout` without letting an
+    expected optional-backend absence escape through a worker future as a
+    traceback.
     """
-    return subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(cmd, 127, stdout=f"ERROR: command not found: {cmd[0]!r}\n")
 
 
 def _tool_version_string(

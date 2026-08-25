@@ -8,4 +8,4 @@
 checks = ["python", "mypy"]
 
 [python]
-dirs = ["src", "docs/conf.py", "tests"]
+dirs = ["src", "docs/conf.py", "setup.py", "tests"]

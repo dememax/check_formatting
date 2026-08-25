@@ -40,6 +40,9 @@ python3.14 -m pip install dist/check_formatting-0.2.0-py3-none-any.whl
 
 The generated wheel is a pure-Python, platform-independent package. Its exact
 filename includes the package version from `check_formatting.__version__`.
+The setuptools build hook repopulates the staged `check_formatting` package
+from source on every build, preventing deleted modules from leaking out of a
+reused `build/` directory into a later wheel.
 
 For development, install the checkout in editable mode:
 
@@ -110,9 +113,9 @@ dirs = ["scripts", "tests"]
 dirs = ["src", "tests"]
 ```
 
-Unknown checker names, unknown top-level keys, unknown keys within a
-section, malformed TOML, and wrong-typed values are all hard errors. A
-section for a checker not in `checks` is simply unused, not an error —
+Unknown or duplicate checker names, unknown top-level keys, unknown keys
+within a section, malformed TOML, and wrong-typed values are all hard errors.
+A section for a checker not in `checks` is simply unused, not an error —
 declare only what you need.
 
 Discovery is **CWD-only**: run the tool from the project root (or pass a
