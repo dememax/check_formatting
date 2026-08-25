@@ -35,6 +35,10 @@ newer.  Install it from a clone with pip::
    check_formatting --help
    check_formatting --version
 
+``--version`` prints the release version followed by the copyright and
+license lines; the same two lines are appended to ``--help``'s epilog,
+mirroring check_rst's own ``--version``/``--help`` convention.
+
 For development, use an editable installation from the repository root::
 
    python3.14 -m pip install --editable .
@@ -118,6 +122,10 @@ Registered checkers
    * - ``yaml``
      - ``prettier``
      - ``[yaml].globs``
+
+Every ``kconfig`` combo always runs ``west build --cmake-only --pristine``,
+forcing a fresh Kconfig evaluation — and therefore a real rebuild — on every
+invocation rather than reusing cached ``.config`` state.
 
 ``kconfig``'s configured ``build_combos`` build concurrently in non-verbose
 mode.  Give each combo its own ``-d``/``--build-dir`` in ``args`` if it needs
@@ -341,10 +349,15 @@ Excluding files
 Backend limitations affect full-scan exclusions.  RST uses ``check_rst``'s own
 selection and does not receive either wrapper exclusion mechanism; invoke
 ``check_rst check --recursive ... --exclude ...`` directly for an excluded RST tree
-audit.  Meson, Web, and Python delegate some full-scan modes to backend
-directory or glob processing, so their native ignore configuration may also
-be required.  Explicit-file, diff, and fix paths can apply the wrapper's
-per-file filtering directly for other checkers.
+audit.  Meson and Web delegate their non-explicit-file check and verbose modes
+to a single batched backend command that cannot filter individual files;
+``.formatting-ignore`` applies to them only in diff, fix, and explicit-file
+modes, so use ``.prettierignore`` for finer-grained web exclusions there.
+Python is scoped to ``[python].dirs`` directly, in every mode, whenever no
+explicit files are given, so ``.formatting-ignore`` never applies to it
+without explicit files; use ``[tool.ruff.exclude]`` in ``pyproject.toml``
+instead.  Explicit-file, diff, and fix paths can apply the wrapper's per-file
+filtering directly for other checkers.
 
 *******
 Usage
