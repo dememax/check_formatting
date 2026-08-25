@@ -145,6 +145,91 @@ CMake-based embedded project enables ``cmake`` and ``kconfig``.  Any registered
 checker may be selected explicitly with ``--checks`` when its required
 configuration is present.
 
+**********
+Backends
+**********
+
+Each row of the table above wraps exactly one independently-maintained
+backend: what it is, how to install it, and any check_formatting-relevant
+gotcha, one entry per backend rather than per checker — ``prettier`` backs
+four checkers (``web``, ``json``, ``ini``, ``yaml``) and is described once.
+None of these are ``check_formatting``'s own code; none are vendored or
+version-pinned by it.
+
+``clang-format`` (``cpp``)
+   Part of the LLVM toolchain.  Install via the system package manager
+   (``sudo apt install clang-format`` on Debian/Ubuntu, ``brew install
+   llvm`` on macOS).  It cannot report *which* rule a file violates or
+   *why* — the only diagnostic it emits is the generic
+   ``[-Wclang-format-violations]`` warning, meaning "this file would look
+   different after formatting".  Run ``--diff`` to see the actual changes
+   it would make; ``--verbose`` produces identical output to plain check
+   mode because clang-format exposes no extra diagnostic flags.
+
+``meson format`` (``meson``)
+   Provided by Meson itself; ``--check-only`` requires Meson ≥ 1.5.0.
+   Install via pip or the system package manager (``pip install meson``).
+   Like clang-format, it exposes no rule-level diagnostics beyond
+   pass/fail.
+
+``prettier`` (``web``, ``json``, ``ini``, ``yaml``)
+   A Node.js tool, not a standalone system binary.  It needs Node.js
+   (≥ 18 recommended) and npm installed, plus the project's own
+   dependencies installed from ``package.json`` at the repository root
+   (``npm install``, which populates ``node_modules/``).  The wrapper
+   invokes it as ``npx prettier``, which resolves the locally installed
+   version from ``node_modules/.bin/prettier``; running it without
+   ``node_modules/`` present makes ``npx`` attempt a one-off network
+   download, which can fail offline or silently pick a different version
+   than the project pins.  ``ini`` additionally needs
+   ``prettier-plugin-ini`` (registered in ``.prettierrc``) for its
+   ``iniSpaceAroundEquals`` behavior; ``json`` auto-selects the ``json``
+   or ``jsonc`` parser per file via ``.prettierrc`` overrides.
+
+``ruff`` (``python``)
+   Python's formatter and linter in one binary.  Install via pip
+   (``pip install ruff``).  Backs both format (``ruff format``) and lint
+   (``ruff check``); both must pass.
+
+``mypy`` (``mypy``)
+   Python's static type-checker.  Resolved from ``PATH`` like every other
+   backend (see "Installation" above).  Install via the system package
+   manager or pip.  Reads its own configuration from ``[tool.mypy]`` in
+   the consuming project's ``pyproject.toml`` — entirely independent of
+   ``.check_formatting.toml``.
+
+``check_rst`` (``rst``)
+   A standalone RST/Sphinx linter and fixer, installed and versioned
+   separately from ``check_formatting`` and resolved from ``PATH``.  A
+   full-repo scan (``--all``, or a direct library call with no
+   ``explicit_files``) additionally needs ``.check_formatting.toml``'s
+   ``[rst].dir`` set to the project's RST root, matching
+   ``.check_rst.toml``'s own ``sphinx-src``.  See check_rst's own guide
+   for its full contract.
+
+``clang-tidy`` (``clang-tidy`` — optional)
+   Part of the LLVM toolchain, installed the same way as clang-format.
+   Additionally requires an up-to-date ``compile_commands.json`` in the
+   build directory named by ``.check_formatting.toml``'s
+   ``[clang_tidy].build_dir`` (generated automatically by Meson on
+   ``meson compile``).  A project with no ``[clang_tidy]`` section skips
+   this checker cleanly, without requiring ``clang-tidy`` on ``PATH`` at
+   all.
+
+``cmake-format`` (``cmake`` — optional, CMake-based projects only)
+   Install via pip (``pip install cmake-format``).  Not relevant to
+   Meson-based projects.
+
+``west`` (``kconfig`` — optional, Zephyr/west projects only)
+   Part of a Zephyr-style West workspace.  Requires at least one entry in
+   ``.check_formatting.toml``'s ``[kconfig].build_combos``; a project
+   with none skips this checker cleanly, without requiring ``west`` on
+   ``PATH``.
+
+``shellcheck`` (``shell`` — optional)
+   Install via the system package manager (``sudo apt install
+   shellcheck`` on Debian/Ubuntu, ``brew install shellcheck`` on macOS).
+
 *****************
 Operating modes
 *****************
