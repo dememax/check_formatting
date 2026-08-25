@@ -72,9 +72,9 @@ malformed TOML, an unknown checker or key, a section of the wrong type, or a
 wrongly typed value is a hard error.  A valid section for a checker not listed
 in ``checks`` is permitted and remains available through ``--checks``.
 
-=====================
+*********************
 Registered checkers
-=====================
+*********************
 
 .. list-table::
    :header-rows: 1
