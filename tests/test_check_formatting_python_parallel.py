@@ -107,6 +107,23 @@ def test_check_python_check_mode_prints_format_then_check_in_order(
     assert out.index("FORMAT_OUTPUT") < out.index("CHECK_OUTPUT")
 
 
+def test_check_python_missing_ruff_fails_cleanly_without_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An optional backend missing from PATH is a normal failed check, not
+    an internal error that escapes from either concurrent future."""
+
+    def missing_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", "ruff")
+
+    monkeypatch.setattr(subprocess, "run", missing_run)
+
+    ok = check_formatting._check_python(tmp_path, dirs=["src"])
+
+    assert ok is False
+    assert capsys.readouterr().out.count("ERROR: command not found: 'ruff'") == 2
+
+
 def test_check_python_fix_mode_stays_sequential_via_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Regression: fix mode must keep using _run (sequential, live-streamed),
     never _run_capture_merged — `ruff check --fix` must only ever see

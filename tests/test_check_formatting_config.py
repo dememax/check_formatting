@@ -141,6 +141,18 @@ def test_unknown_checker_name_is_hard_error_without_traceback(
     assert "unknown checker" in capsys.readouterr().out
 
 
+def test_duplicate_checker_name_is_hard_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Duplicate entries would submit the same checker more than once and
+    can race two mutating ``--fix`` runs against the same files."""
+    (tmp_path / ".check_formatting.toml").write_text('checks = ["python", "python"]\n')
+
+    with pytest.raises(SystemExit) as exc_info:
+        check_formatting._load_project_config(tmp_path)
+
+    assert exc_info.value.code == 1
+    assert "duplicate checker(s): python" in capsys.readouterr().out
+
+
 def test_valid_config_loads_correctly(tmp_path: Path) -> None:
     (tmp_path / ".check_formatting.toml").write_text(_VALID_TOML)
     config = check_formatting._load_project_config(tmp_path)
