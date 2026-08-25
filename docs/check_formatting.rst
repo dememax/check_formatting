@@ -314,16 +314,20 @@ Backend scope matrix
      - ``clang-tidy``
      - Report-only; no source mutation to restrict
    * - ``meson``, ``cmake``
-     - Meson / ``cmake-format``
+     - ``meson format`` / ``cmake-format``
      - Whole-file only
-   * - ``python``
-     - Ruff
-     - Whole-file formatting; no native fix-range flag
+   * - ``python`` (format)
+     - ``ruff format``
+     - Whole-file only (same gap as Black)
+   * - ``python`` (lint)
+     - ``ruff check``
+     - No native fix-range flag; diagnostics are per-line, so reporting
+       could be filtered post-hoc (not implemented)
    * - ``mypy``
      - ``mypy``
      - Whole-program inference; line restriction is not applicable
    * - ``kconfig``
-     - West / Kconfig
+     - ``west build --cmake-only``
      - Validates merged configuration; line restriction is not applicable
    * - ``shell``
      - ``shellcheck``
