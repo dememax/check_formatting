@@ -168,6 +168,29 @@ def test_check_kconfig_fails_on_warning_line(tmp_path: Path, monkeypatch: pytest
     assert ok is False
 
 
+def test_check_kconfig_missing_west_binary_fails_cleanly_without_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`west` can vanish between the initial `shutil.which` probe and actual
+    execution (TOCTOU). `_run_capture_merged` already turns that into a
+    normal exit-127 result (see test_check_formatting_python_parallel.py's
+    equivalent ruff case) rather than raising — this must surface as a
+    normal failed check, not an internal traceback out of the worker future."""
+    root = tmp_path
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/west")
+
+    def missing_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", "west")
+
+    monkeypatch.setattr(subprocess, "run", missing_run)
+
+    combos: list[dict[str, object]] = [{"label": "main/board_a", "args": []}]
+    ok = check_formatting._check_kconfig(root, build_combos=combos)
+
+    assert ok is False
+    assert "ERROR: command not found: '/usr/bin/west'" in capsys.readouterr().out
+
+
 def test_check_kconfig_tool_not_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = tmp_path
     monkeypatch.setattr(shutil, "which", lambda name: None)

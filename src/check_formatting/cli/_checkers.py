@@ -1125,11 +1125,7 @@ def _check_kconfig(
         for combo, cmd, future in zip(build_combos, commands, futures, strict=True):
             label = combo["label"]
             log(f"▶ {' '.join(cmd)}  ({label})")
-            try:
-                result = future.result()
-            except FileNotFoundError:
-                print(f"ERROR: could not execute {west_bin}")
-                return False
+            result = future.result()
 
             kconfig_warnings = 0
             for line in result.stdout.splitlines():
