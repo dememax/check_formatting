@@ -5,7 +5,10 @@
 # .check_rst.toml convention: committed, tool-echoed, not auto-detected).
 # Unknown keys are a hard error.
 
-checks = ["python", "mypy"]
+checks = ["python", "mypy", "rst"]
 
 [python]
 dirs = ["src", "docs/conf.py", "setup.py", "tests"]
+
+[rst]
+dir = "docs"

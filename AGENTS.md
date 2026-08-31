@@ -70,7 +70,8 @@ installed; most tests mock the backend entirely and never touch it.
 ## Formatting
 
 This project dogfoods itself: `.check_formatting.toml` at the repo root
-configures `check_formatting` to check its own Python source.
+configures `check_formatting` to check its Python source, strict typing, and
+RST documentation.
 
 ```bash
 PYTHONPATH=src python3.14 -m check_formatting --fix
@@ -78,6 +79,45 @@ PYTHONPATH=src python3.14 -m check_formatting
 ```
 
 Never commit with outstanding formatting or type-check violations.
+
+## reStructuredText and Sphinx documentation
+
+`check_rst` is the system-installed authority for universal RST formatting,
+verified structure, and the real Sphinx build.  This repository's
+`.check_rst.toml` declares `docs/` as the Sphinx source and a persistent build
+directory; `.check_formatting.toml` declares the same tree as `[rst].dir`, so
+the ordinary wrapper cycle includes changed RST files and `--all` includes the
+complete maintained documentation baseline.
+
+For a cold reader, the safe workflow after an RST edit is:
+
+```bash
+check_rst check --skip-fixable   # review semantic warnings and non-fixable errors
+check_rst fix --fast             # mechanically fix the Git-scoped edit
+check_rst check                  # authoritative rules + Sphinx validation
+```
+
+`--skip-fixable` is a display filter, not a promise of exit status 0.  Bare
+selection is Git-aware; naming files or using `--recursive` expresses
+whole-file intent.  In a dirty worktree with unrelated documentation edits,
+use the same owned-file allowlist with `--git-scope` on all three commands.
+
+When writing a heading, declare its intended depth with a 9-character
+placeholder underline and let `fix --fast` materialize the syntax.  Reuse a
+sibling's level; do not copy or hand-count title adornments.
+
+When reading, use `check_rst outline FILE` if the structure or target is
+unknown and `check_rst context ENTRY FILE` for a known entry.  Both report
+complete physical ranges.  Use `refs` for reference relationships and
+`compare` to explain semantic changes.  Do not rediscover document structure
+with `grep`/`head`/`tail`/`sed`, and do not truncate `diff`: an incomplete
+patch can look applicable.
+
+The complete behavior belongs to `check_rst COMMAND --help`,
+`~/github/check_rst/docs/guide.rst`, and
+`~/github/check_rst/docs/rules.rst`.
+Keep only check_formatting-specific adapter behavior in this project's own
+product documentation.
 
 ## Virtualenv / tool-resolution policy
 
