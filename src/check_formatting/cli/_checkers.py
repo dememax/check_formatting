@@ -1186,7 +1186,7 @@ def _check_shell(
             return True
         files, excluded = result
     else:
-        all_files = [f for g in globs for f in sorted(root.glob(g))]
+        all_files = sorted({file for glob in globs for file in root.glob(glob)})
         files, excluded = _filter_files(all_files, root, ignore_patterns)
     if _report_empty_selection(files, excluded, log, "shell"):
         return True

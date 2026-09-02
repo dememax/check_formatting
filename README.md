@@ -152,6 +152,12 @@ RST is the exception: `check_rst` owns its native selection, so invoke
 | `shell` | shellcheck | `[shell].globs` |
 | `yaml` | prettier | `[yaml].globs` |
 
+The `shell` adapter runs bare `shellcheck` from the project root, preserving
+ShellCheck's native `.shellcheckrc` policy. Use that file for settings such as
+`shell=bash`, `external-sources=true`, `source-path=SCRIPTDIR`,
+`check-sourced=true`, and the deliberately stricter `enable=all`; keep
+project-specific dialect and suppression choices out of the global wrapper.
+
 `kconfig`'s configured `build_combos` build concurrently (non-verbose mode)
 — give each combo its own `-d`/`--build-dir` in `args` if it needs isolated
 build state; `west build` already supports this directly, no

@@ -234,6 +234,24 @@ version-pinned by it.
 ``shellcheck`` (``shell`` — optional)
    Install via the system package manager (``sudo apt install
    shellcheck`` on Debian/Ubuntu, ``brew install shellcheck`` on macOS).
+   The adapter invokes ``shellcheck`` from the project root without replacing
+   its native policy, so a committed ``.shellcheckrc`` is the right place for
+   dialect, sourced-file, severity, and optional-check settings.  A Bash
+   project that wants complete analysis of sourced libraries can start with:
+
+   .. code-block:: ini
+
+      shell=bash
+      external-sources=true
+      source-path=SCRIPTDIR
+      check-sourced=true
+      enable=all
+
+   ``enable=all`` deliberately opts into advisory style checks as well as
+   correctness checks; omit it when the project wants ShellCheck's default
+   policy.  Prefer a narrow, documented file-level ``# shellcheck disable=...``
+   directive when a sourced configuration library intentionally looks unused
+   in isolation instead of disabling that diagnostic for the whole project.
 
 *****************
 Operating modes

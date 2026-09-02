@@ -1,7 +1,7 @@
 # Copyright (C) 2026 Maxime P. DEMENTYEV
 # SPDX-License-Identifier: GPL-3.0-only
 """The checker registry: `Checker`, the `_CHECKERS` table mapping each
-name to its function/kwargs/fix-command, and the two accessors
+name to its function/kwargs/fix-command/automatic-fix capability, and the accessors
 (`_checker_kwargs`/`_fix_command`) every consumer goes through instead of
 maintaining their own name-keyed tables.
 """
@@ -36,7 +36,7 @@ _CheckFn = Callable[..., bool]
 
 
 class Checker(NamedTuple):
-    """One checker's full registration: label, function, and the two things
+    """One checker's full registration: label, function, and the metadata
     that used to be separately-maintained, name-keyed tables alongside it.
 
     Before this, `_CHECKERS` (label + function), `_checker_kwargs`'s
@@ -54,7 +54,7 @@ class Checker(NamedTuple):
     monkeypatch ``_CHECKERS`` down to a bare
     ``{"ini": ("prettier-plugin-ini (INI)", fail_if_called)}`` stub. Both
     index access (``entry[0]``) and ``label, fn, *_ = entry``-style unpacking
-    work unchanged whether *entry* is that 2-tuple stub or this full 4-field
+    work unchanged whether *entry* is that 2-tuple stub or this full 5-field
     ``Checker``.
     """
 
@@ -62,6 +62,7 @@ class Checker(NamedTuple):
     fn: _CheckFn
     kwargs_fn: Callable[[ProjectConfig, bool], dict[str, object]]
     fix_command_fn: Callable[[ProjectConfig, bool], str]
+    auto_fix: bool = True
 
 
 def _no_extra_kwargs(config: ProjectConfig, git_auto_detected: bool) -> dict[str, object]:
@@ -124,6 +125,7 @@ _CHECKERS: dict[str, Checker] = {
         _check_mypy,
         lambda config, git_auto_detected: {"dirs": config.mypy_dirs},
         _no_auto_fix("(mypy has no automatic fix — resolve type errors manually)"),
+        False,
     ),
     "rst": Checker(
         "check_rst (RST documentation)",
@@ -142,6 +144,7 @@ _CHECKERS: dict[str, Checker] = {
             "build_dir": pathlib.Path(config.clang_tidy_build_dir) if config.clang_tidy_build_dir else None,
         },
         _no_auto_fix("(clang-tidy has no automatic fix — resolve violations manually)"),
+        False,
     ),
     "cmake": Checker(
         "cmake-format (CMake)",
@@ -154,12 +157,14 @@ _CHECKERS: dict[str, Checker] = {
         _check_kconfig,
         lambda config, git_auto_detected: {"build_combos": config.kconfig_build_combos},
         _no_auto_fix("(Kconfig has no automatic fix — correct the .conf files manually)"),
+        False,
     ),
     "shell": Checker(
         "shellcheck (shell scripts)",
         _check_shell,
         lambda config, git_auto_detected: {"globs": config.shell_globs},
         _no_auto_fix("(shellcheck has no automatic fix — resolve lint findings manually)"),
+        False,
     ),
     "yaml": Checker(
         "prettier (YAML)",

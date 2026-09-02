@@ -851,11 +851,18 @@ def check_formatting(
             else:
                 print("FORMATTING: violations found. To fix, run:")
             hint_git_auto_detected = _bare_scoped(explicit_files, git_auto_detected)
-            for name in checks:
-                if not results.get(name, True):
-                    print(f"    {_fix_command(name, config, git_auto_detected=hint_git_auto_detected)}")
-            print()
-            print("    (or re-run with --fix to apply all fixes at once)")
+            failed_checks = [name for name in checks if not results.get(name, True)]
+            for name in failed_checks:
+                print(f"    {_fix_command(name, config, git_auto_detected=hint_git_auto_detected)}")
+            auto_fixable_failures = [name for name in failed_checks if _CHECKERS[name].auto_fix]
+            if auto_fixable_failures:
+                print()
+                if len(auto_fixable_failures) == len(failed_checks):
+                    print("    (or re-run with --fix to apply all fixes at once)")
+                else:
+                    print(
+                        "    (or re-run with --fix to apply automatic fixes where available; manual fixes will remain)"
+                    )
         return False
 
     if fix:
