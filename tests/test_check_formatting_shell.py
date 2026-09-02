@@ -133,6 +133,49 @@ def test_check_shell_explicit_selection_uses_configured_glob_for_extensionless_s
     assert captured["cmd"] == ["/usr/bin/shellcheck", str(script)]
 
 
+def test_check_shell_deduplicates_files_selected_by_overlapping_globs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One physical script must produce one ShellCheck input and one set of diagnostics."""
+    script = tmp_path / "scripts" / "build.sh"
+    script.parent.mkdir()
+    script.write_text("#!/bin/sh\necho hi\n")
+    captured: dict[str, list[str]] = {}
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/shellcheck")
+
+    def fake_run(cmd: list[str], cwd: Path) -> int:
+        captured["cmd"] = cmd
+        return 0
+
+    monkeypatch.setattr(check_formatting, "_run", fake_run)
+
+    ok = check_formatting._check_shell(root=tmp_path, globs=["scripts/*.sh", "scripts/**/*.sh"])
+
+    assert ok is True
+    assert captured["cmd"] == ["/usr/bin/shellcheck", str(script)]
+
+
+def test_check_shell_verbose_reports_real_tool_information(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verbose mode must identify ShellCheck before running the ordinary lint pass."""
+    script = tmp_path / "build.sh"
+    script.write_text("#!/bin/sh\necho hi\n")
+    tool_info_calls: list[tuple[str, Path]] = []
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/shellcheck")
+    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 0)
+    monkeypatch.setattr(
+        check_formatting,
+        "_print_tool_info",
+        lambda tool, cwd: tool_info_calls.append((tool, cwd)),
+    )
+
+    ok = check_formatting._check_shell(root=tmp_path, globs=["*.sh"], verbose=True)
+
+    assert ok is True
+    assert tool_info_calls == [("/usr/bin/shellcheck", tmp_path)]
+
+
 _VALID_SHELL_TOML = 'checks = ["shell"]\n\n[shell]\nglobs = ["scripts/*.sh"]\n'
 
 
