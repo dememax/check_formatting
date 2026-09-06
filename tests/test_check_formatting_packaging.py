@@ -11,7 +11,14 @@ import sys
 import zipfile
 from pathlib import Path
 
+from check_formatting import __version__
+
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_package_version_is_0_3_0() -> None:
+    """The VNU feature release must advertise its new public version."""
+    assert __version__ == "0.3.0"
 
 
 def test_wheel_prunes_deleted_module_left_in_build_tree(tmp_path: Path) -> None:
