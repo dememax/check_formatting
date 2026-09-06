@@ -214,6 +214,14 @@ args = ["--filterfile", ".vnu-filter"]
     }
 
 
+def test_vnu_native_args_are_optional(tmp_path: Path) -> None:
+    (tmp_path / ".check_formatting.toml").write_text('checks = ["vnu"]\n\n[vnu]\nglobs = ["public/**/*.html"]\n')
+
+    config = check_formatting._load_project_config(tmp_path)
+
+    assert config.vnu_args == []
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [("globs", '"*.html"'), ("args", '"--errors-only"')],
