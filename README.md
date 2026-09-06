@@ -35,7 +35,7 @@ and its console entry point. To build the wheel explicitly instead:
 ```bash
 cd /path/to/check_formatting
 python3.14 -m pip wheel --wheel-dir dist .
-python3.14 -m pip install dist/check_formatting-0.2.0-py3-none-any.whl
+python3.14 -m pip install dist/check_formatting-0.3.0-py3-none-any.whl
 ```
 
 The generated wheel is a pure-Python, platform-independent package. Its exact
