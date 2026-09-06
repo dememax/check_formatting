@@ -123,7 +123,7 @@ product documentation.
 
 No Python virtualenv is assumed active. Every backend this tool invokes
 (`ruff`, `mypy`, `npx`, `clang-format`, `clang-tidy`, `cmake-format`,
-`west`, `shellcheck`, `check_rst`) is resolved from `PATH` — never from a
+`west`, `shellcheck`, `vnu`, `check_rst`) is resolved from `PATH` — never from a
 project-local `.venv/`. This is a deliberate property of the tool itself
 (it has to work correctly regardless of which project it's checking, and
 that project's own venv, if any, is none of this tool's business) and

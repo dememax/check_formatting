@@ -8,7 +8,7 @@ SPDX-License-Identifier: GPL-3.0-only
 A project-agnostic formatting/lint checker: a thin, pluggable wrapper over
 independently-maintained backends (clang-format, meson format, prettier,
 ruff, mypy, check_rst, clang-tidy, cmake-format,
-west, shellcheck). Each backend is registered as a *checker* the tool can
+west, shellcheck, vnu). Each backend is registered as a *checker* the tool can
 run in check, verbose, diff, or fix mode — uniformly, across languages and
 file types, from one CLI.
 
@@ -141,6 +141,7 @@ RST is the exception: `check_rst` owns its native selection, so invoke
 | `cpp` | clang-format | `[cpp].globs` |
 | `meson` | meson format | (discovers `meson.build`/`meson.options` recursively) |
 | `web` | prettier | `[web].globs` |
+| `vnu` | Nu Html Checker | `[vnu].globs`, optional `[vnu].args` |
 | `python` | ruff (format + lint) | `[python].dirs` |
 | `json` | prettier | `[json].files` |
 | `ini` | prettier (prettier-plugin-ini) | `[ini].globs` |
@@ -158,6 +159,28 @@ ShellCheck's native `.shellcheckrc` policy. Use that file for settings such as
 `check-sourced=true`, and the deliberately stricter `enable=all`; keep
 project-specific dialect and suppression choices out of the global wrapper.
 
+The `vnu` adapter performs strict HTML, XHTML, standalone CSS, and standalone
+SVG conformance analysis. It always supplies `--Werror`, `--also-check-css`,
+and `--also-check-svg`; `[vnu].args` may add native options such as
+`--filterfile`. Its scope is deliberately independent of `[web].globs`:
+`web` identifies files formatted by Prettier, while `vnu` identifies files
+validated by Nu. Overlap is expected and useful, JavaScript belongs only to
+`web`, and SVG may belong only to `vnu`.
+
+```toml
+[vnu]
+globs = ["public/**/*.html", "public/**/*.css", "public/**/*.svg"]
+# Optional native VNU arguments:
+args = ["--filterfile", ".vnu-filter"]
+```
+
+This host uses the exact upstream Nu release `26.9.5` (`a9333cb`), installed
+as `~/opt/vnu/26.9.5/vnu.jar`. The artifact SHA-256 is
+`b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756`.
+The complete reproducible installation and upgrade procedure is in
+[the backend guide](docs/check_formatting.rst#backends); it never resolves a
+mutable `latest` release.
+
 `kconfig`'s configured `build_combos` build concurrently (non-verbose mode)
 — give each combo its own `-d`/`--build-dir` in `args` if it needs isolated
 build state; `west build` already supports this directly, no
@@ -169,9 +192,10 @@ A category name names the **file domain** it covers (`cpp`, `web`,
 `python`, ...) — except where a domain already has a primary
 formatter/linter and a second, deeper-analysis tool exists for the *same*
 files: `mypy` layers Python type-checking on top of `python` (ruff format
-+ lint), and `clang-tidy` layers C++ static analysis on top of `cpp`
-(clang-format). Those two are named after the tool itself specifically to
-disambiguate from the domain category they extend.
++ lint), `clang-tidy` layers C++ static analysis on top of `cpp`
+(clang-format), and `vnu` layers HTML/CSS/SVG conformance analysis on top of
+the overlapping `web` formatting domain. These are named after the tool
+itself to disambiguate from the domain category they extend.
 
 Whether a checker is in a project's default `checks` list is entirely
 project-relative: a Meson/prettier/ruff project might default to
@@ -265,6 +289,7 @@ whole-file scope risky there.
 | `mypy` | mypy | N/A — whole-program type inference |
 | `kconfig` | west build --cmake-only | N/A — validates merged Kconfig state across all `.conf` files together |
 | `shell` | shellcheck | No known native flag |
+| `vnu` | Nu Html Checker | N/A — report-only conformance analysis |
 | `rst` | check_rst | Yes — check_rst's own git integration |
 
 For RST, default Git-scoped fixing uses `check_rst fix --fast` and diff

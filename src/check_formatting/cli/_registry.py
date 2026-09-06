@@ -25,6 +25,7 @@ from check_formatting.cli._checkers import (
     _check_python,
     _check_rst,
     _check_shell,
+    _check_vnu,
     _check_web,
     _check_yaml,
 )
@@ -73,7 +74,7 @@ def _no_extra_kwargs(config: ProjectConfig, git_auto_detected: bool) -> dict[str
 
 def _no_auto_fix(message: str) -> Callable[[ProjectConfig, bool], str]:
     """Return a constant-*message* ``fix_command_fn`` for a checker with no
-    automatic fix (``mypy``, ``clang-tidy``, ``kconfig``, ``shell``)."""
+    automatic fix (``mypy``, ``clang-tidy``, ``kconfig``, ``shell``, ``vnu``)."""
 
     def fix_command_fn(config: ProjectConfig, git_auto_detected: bool) -> str:
         return message
@@ -99,6 +100,13 @@ _CHECKERS: dict[str, Checker] = {
         _check_web,
         lambda config, git_auto_detected: {"globs": config.web_globs, "git_auto_detected": git_auto_detected},
         lambda config, git_auto_detected: f"npx prettier --write {' '.join(f'{g!r}' for g in config.web_globs)}",
+    ),
+    "vnu": Checker(
+        "vnu (HTML/CSS/SVG conformance)",
+        _check_vnu,
+        lambda config, git_auto_detected: {"globs": config.vnu_globs, "args": config.vnu_args},
+        _no_auto_fix("(vnu has no automatic fix — resolve conformance findings manually)"),
+        False,
     ),
     "python": Checker(
         "ruff (Python)",

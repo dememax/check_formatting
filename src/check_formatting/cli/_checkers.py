@@ -1,8 +1,8 @@
 # Copyright (C) 2026 Maxime P. DEMENTYEV
 # SPDX-License-Identifier: GPL-3.0-only
-"""The thirteen registered checkers themselves — one `_check_*` function
+"""The fourteen registered checkers themselves — one `_check_*` function
 per backend (clang-format, meson format, prettier, ruff, mypy, check_rst,
-clang-tidy, cmake-format, west, shellcheck). See `_registry.py` for how
+clang-tidy, cmake-format, west, shellcheck, vnu). See `_registry.py` for how
 each is wired into the `_CHECKERS` table with its kwargs/fix-command.
 """
 
@@ -1200,6 +1200,61 @@ def _check_shell(
         cli._print_tool_info(shellcheck_bin, cwd=root)
     log(f"▶ shellcheck  {label}")
     return cli._run([shellcheck_bin] + [str(f) for f in files], cwd=root) == 0
+
+
+def _check_vnu(
+    root: pathlib.Path,
+    fix: bool = False,
+    diff: bool = False,
+    verbose: bool = False,
+    ignore_patterns: Sequence[str] = (),
+    explicit_files: list[pathlib.Path] | None = None,
+    globs: Sequence[str] = (),
+    args: Sequence[str] = (),
+    quiet: bool = False,
+) -> bool:
+    """Run Nu conformance checks on HTML, CSS, and SVG documents.
+
+    VNU is analysis-only, so every operating mode runs the same validation.
+    ``--Werror`` makes warnings fail the wrapper, while ``--also-check-css``
+    and ``--also-check-svg`` activate Nu's standalone CSS and SVG support in
+    addition to its default HTML/XHTML handling. Project-supplied ``[vnu].args``
+    follow those mandatory policy flags and may configure native facilities
+    such as ``--filterfile``.
+
+    The configured ``[vnu].globs`` are deliberately independent of
+    ``[web].globs``: Prettier owns formatting scope; Nu owns conformance scope.
+    """
+    log = _make_log(quiet)
+    if explicit_files is not None:
+        result = _select_explicit_from_globs(
+            explicit_files,
+            root,
+            ignore_patterns,
+            globs,
+            fallback_extensions=frozenset({".html", ".htm", ".xhtml", ".xht", ".css", ".svg"}),
+        )
+        if result is None:
+            log("  (no VNU files in selection)")
+            return True
+        files, excluded = result
+    else:
+        all_files = sorted({file for glob in globs for file in root.glob(glob) if file.is_file()})
+        files, excluded = _filter_files(all_files, root, ignore_patterns)
+    if _report_empty_selection(files, excluded, log, "VNU"):
+        return True
+
+    _log_analysis_only("vnu", "validation", fix, diff, log)
+    vnu_bin = shutil.which("vnu")
+    if vnu_bin is None:
+        print("  ERROR: vnu not found — install the pinned Nu backend and add its launcher to PATH")
+        return False
+    if verbose:
+        cli._print_tool_info(vnu_bin, cwd=root)
+
+    mandatory_args = ["--Werror", "--also-check-css", "--also-check-svg"]
+    log(f"▶ vnu {' '.join(mandatory_args)}  {_file_count_label(len(files), excluded)}")
+    return cli._run([vnu_bin, *mandatory_args, *args, *(str(file) for file in files)], cwd=root) == 0
 
 
 def _check_rst(

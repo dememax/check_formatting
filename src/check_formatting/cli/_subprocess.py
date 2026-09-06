@@ -28,7 +28,7 @@ class _ThreadLocalStdout:
     private buffer, installed for the duration of :func:`check_formatting`'s
     parallel checker dispatch.
 
-    Eleven of the thirteen checkers still stream live via :func:`_run`'s
+    Twelve of the fourteen checkers still stream live via :func:`_run`'s
     per-line ``sys.stdout.write`` — safe when only one checker runs at a
     time, but interleaved garbage if several threads write to the single
     real ``sys.stdout`` concurrently.  Each dispatched checker's thread
@@ -218,7 +218,7 @@ def _make_log(quiet: bool) -> Callable[..., None]:
 
 def _log_analysis_only(tool: str, verb: str, fix: bool, diff: bool, log: Callable[..., None]) -> None:
     """Log the "no fix/diff mode of its own" notice shared by every report-only
-    checker (mypy, clang-tidy, kconfig, shell): asked to fix or diff, each just
+    checker (mypy, clang-tidy, kconfig, shell, vnu): asked to fix or diff, each just
     re-runs its own analysis (*verb*) instead.
     """
     if fix:

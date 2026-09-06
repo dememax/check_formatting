@@ -7,16 +7,16 @@ Check (or fix) source file formatting against project coding standards.
 
 Each checker below is a plugin over an external formatter/linter backend
 (clang-format, meson format, prettier, ruff, mypy, check_rst, clang-tidy,
-cmake-format, west, shellcheck).  Which checkers are active by default and
+cmake-format, west, shellcheck, vnu).  Which checkers are active by default and
 which globs/directories/files each one scans are declared in
 ``.check_formatting.toml`` at the repository root — never hardcoded in
 this script.  The per-checker command lines shown below describe *behavior*
 (what each mode does) using this project's own current
 ``.check_formatting.toml`` values as the illustrative file set; a project
 with a different config sees the same modes applied to its own declared
-files instead.  Thirteen checkers are registered in total —
+files instead.  Fourteen checkers are registered in total —
 ``cpp``, ``meson``, ``web``, ``python``, ``json``, ``ini``, ``mypy``,
-``rst``, ``clang-tidy``, ``cmake``, ``kconfig``, ``shell``, ``yaml`` — but
+``rst``, ``clang-tidy``, ``cmake``, ``kconfig``, ``shell``, ``yaml``, ``vnu`` — but
 none is active unless a project's own ``.check_formatting.toml`` lists it
 in ``checks``.  "Active by default" is entirely project-relative: a
 Meson/prettier/ruff project might default to ``cpp``/``meson``/``web``/
@@ -74,7 +74,7 @@ Best-effort tier — heuristic
 
 Every other checker's backend has no equivalent mechanism at all —
 native or reconstructable (meson format, cmake-format, ruff format,
-``ruff check --fix``, mypy, west, shellcheck) — so ``--fix`` is
+``ruff check --fix``, mypy, west, shellcheck, vnu) — so ``--fix`` is
 necessarily whole-file for them, and always has been.  This is a
 materially lower risk for them than it was for ``rst``: clang-format,
 prettier, and ``ruff format`` are convergent, idempotent formatters —
@@ -116,7 +116,7 @@ check (default)
              call) runs check_rst check --recursive on [rst].dir (a genuine
              full-repo scan; missing [rst].dir is an error).
              Sphinx facts come from .check_rst.toml at the repository root.
-    clang-tidy, cmake, kconfig, shell, yaml — not necessarily in a given
+    clang-tidy, cmake, kconfig, shell, yaml, vnu — not necessarily in a given
              project's default ``checks`` list; see the module-level note above and
              ``--checks <name> --help``-style docstrings on each
              ``_check_*`` function for their own config keys and behavior
@@ -140,7 +140,7 @@ verbose (``--verbose``)
     ini    — npx prettier --check --log-level log (same files as check mode)
     mypy   — mypy --show-error-context [mypy].dirs (or [python].dirs fallback)
     rst    — check_rst check --verbose (adds context lines to each finding)
-    clang-tidy, cmake, kconfig, shell, yaml — same file selection as check
+    clang-tidy, cmake, kconfig, shell, yaml, vnu — same file selection as check
              mode; most expose no extra diagnostic flags (see each
              ``_check_*`` function's docstring)
 
@@ -160,12 +160,12 @@ diff (``--diff``)
     rst    — check_rst diff --fast (native mechanical preview without validation)
     cmake  — cmake-format <file> (stdout) vs original, via difflib
     yaml   — npx prettier <file> (stdout) vs original, via difflib
-    clang-tidy, kconfig, shell — same as check (none of the three
+    clang-tidy, kconfig, shell, vnu — same as check (none of these
              underlying tools has a diff mode)
 
 fix (``--fix``)
     Each formatter is run in write/inplace mode.  Files are modified.
-    clang-tidy, mypy, kconfig, and shell have no fix mode of their own —
+    clang-tidy, mypy, kconfig, shell, and vnu have no fix mode of their own —
     they run their check-mode analysis instead and report violations for
     manual resolution.  ``cpp`` and ``rst`` restrict the write to just the
     changed hunks of an auto-detected file rather than the whole file
@@ -288,6 +288,14 @@ shell scripts)
         sudo apt install shellcheck        # Debian/Ubuntu
         brew install shellcheck            # macOS
 
+vnu (``vnu`` checker — optional; HTML/XHTML/CSS/SVG conformance)
+    This host uses the exact VNU version 26.9.5 (upstream commit a9333cb),
+    installed at ``~/opt/vnu/26.9.5/vnu.jar`` with SHA-256
+    ``b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756``.
+    See ``docs/check_formatting.rst`` for the version-pinned installation and
+    upgrade procedure.  The adapter resolves the bare ``vnu`` launcher from
+    ``PATH``, enables standalone CSS/SVG checks, and treats warnings as errors.
+
 A per-checker summary is printed at the end.
 Exits 0 only if every checker reports no violations.
 
@@ -370,6 +378,8 @@ Checker                 Tool                          Line-range restriction ava
 ``shell``               shellcheck                     No known native flag; several checks
                                                         (unused vars, sourced-file resolution) are
                                                         whole-script by nature regardless
+``vnu``                 Nu Html Checker                 **N/A** — report-only conformance analysis;
+                                                        no source mutation to restrict
 ``rst``                 check_rst                      Yes — check_rst's own bare-mode git
                                                         integration, exploited by ``_check_rst``
                                                         when the selection is git auto-detected
@@ -423,6 +433,7 @@ from check_formatting.cli._checkers import (
     _check_python,
     _check_rst,
     _check_shell,
+    _check_vnu,
     _check_web,
     _check_yaml,
     _invalidate_mypy_cache_if_version_changed,
@@ -503,6 +514,7 @@ __all__ = [
     "_check_python",
     "_check_rst",
     "_check_shell",
+    "_check_vnu",
     "_check_web",
     "_check_yaml",
     "_checker_kwargs",
@@ -714,7 +726,7 @@ def check_formatting(
         """Run checker *name* with its own private stdout capture buffer.
 
         Every checker dispatches concurrently (see below), so this always
-        captures rather than only under --json: 11 of 13 checkers still
+        captures rather than only under --json: 12 of 14 checkers still
         stream live via _run's per-line sys.stdout.write, which would
         interleave garbage if several ran at once against the single real
         stdout. mux (the thread-local stdout installed for the duration of

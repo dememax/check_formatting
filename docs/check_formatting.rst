@@ -97,6 +97,9 @@ Registered checkers
    * - ``web``
      - ``prettier``
      - ``[web].globs``
+   * - ``vnu``
+     - Nu Html Checker
+     - ``[vnu].globs`` and optional ``[vnu].args``
    * - ``python``
      - ``ruff format`` and ``ruff check``
      - ``[python].dirs``
@@ -140,9 +143,11 @@ for it.  Combos sharing a build directory will race.  ``--verbose`` stays
 sequential, one combo at a time, so its live-streamed output is never
 interleaved.
 
-Checker names normally describe a file domain.  ``mypy`` and ``clang-tidy``
-are named for their backends because they add deeper analysis to domains that
-already have primary ``python`` and ``cpp`` format/lint checkers.
+Checker names normally describe a file domain.  ``mypy``, ``clang-tidy``, and
+``vnu`` are named for their backends because they add deeper analysis to
+domains that already have primary ``python``, ``cpp``, and ``web``
+format/lint checkers.  ``vnu`` is preferable to ``html`` because Nu also
+checks standalone CSS and SVG.
 
 Whether a checker is enabled by default is a fact about the consuming
 repository.  A Meson project may enable ``cpp`` and ``meson`` while a
@@ -158,8 +163,9 @@ Each row of the table above wraps exactly one independently-maintained
 backend: what it is, how to install it, and any check_formatting-relevant
 gotcha, one entry per backend rather than per checker — ``prettier`` backs
 four checkers (``web``, ``json``, ``ini``, ``yaml``) and is described once.
-None of these are ``check_formatting``'s own code; none are vendored or
-version-pinned by it.
+None of these are ``check_formatting``'s own code or Python dependencies.
+The VNU instructions below pin the exact independently installed version used
+to validate this adapter.
 
 ``clang-format`` (``cpp``)
    Part of the LLVM toolchain.  Install via the system package manager
@@ -252,6 +258,67 @@ version-pinned by it.
    policy.  Prefer a narrow, documented file-level ``# shellcheck disable=...``
    directive when a sourced configuration library intentionally looks unused
    in isolation instead of disabling that diagnostic for the whole project.
+
+``vnu`` (``vnu`` — optional)
+   The Nu Html Checker performs standards-conformance analysis for HTML,
+   XHTML, CSS, and SVG.  The adapter always enables standalone CSS and SVG
+   checking and treats warnings as failures.  Additional native options, such
+   as ``--filterfile``, may be supplied through ``[vnu].args``.
+
+   ``[vnu].globs`` and ``[web].globs`` are independent declarations with
+   intentionally overlapping scope.  ``web`` says which HTML/CSS/JavaScript
+   files Prettier owns; ``vnu`` says which HTML/XHTML/CSS/SVG files Nu
+   validates.  Start broad, review every finding, and add exclusions or a
+   narrowly documented Nu filter only after judging actual project output.
+   Duplicate parsing and corroborating diagnostics are expected.
+
+   .. code-block:: toml
+
+      [vnu]
+      globs = ["public/**/*.html", "public/**/*.css", "public/**/*.svg"]
+      # Optional native VNU arguments:
+      args = ["--filterfile", ".vnu-filter"]
+
+   Version ``26.9.5`` (upstream commit ``a9333cb``) is the version installed
+   and integration-tested on this host.  Its ``vnu.jar`` SHA-256 is
+   ``b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756``.
+   Install that exact official ``vnu-jar`` package into ``~/opt``; npm is used
+   only to acquire and integrity-check the versioned package, while the
+   resulting launcher needs only Java 17 or newer at run time:
+
+   .. code-block:: bash
+
+      set -euo pipefail
+      vnu_version=26.9.5
+      vnu_sha256=b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756
+      vnu_stage=$(mktemp -d)
+      trap 'rm -rf -- "${vnu_stage}"' EXIT
+
+      java -version
+      npm --version
+      npm pack "vnu-jar@${vnu_version}" --pack-destination "${vnu_stage}"
+      tar -xf "${vnu_stage}/vnu-jar-${vnu_version}.tgz" -C "${vnu_stage}"
+      printf '%s  %s\n' "${vnu_sha256}" \
+         "${vnu_stage}/package/build/dist/vnu.jar" | sha256sum -c -
+
+      install -d "${HOME}/opt/vnu/${vnu_version}" "${HOME}/opt/bin"
+      install -m 0644 "${vnu_stage}/package/build/dist/vnu.jar" \
+         "${HOME}/opt/vnu/${vnu_version}/vnu.jar"
+      ln -sfn "${vnu_version}/vnu.jar" "${HOME}/opt/vnu/vnu.jar"
+      printf '#!/bin/sh\nexec java -jar "%s/opt/vnu/%s/vnu.jar" "$@"\n' \
+         "${HOME}" "${vnu_version}" >"${HOME}/opt/bin/vnu"
+      chmod 0755 "${HOME}/opt/bin/vnu"
+
+      vnu --version
+      sha256sum "${HOME}/opt/vnu/${vnu_version}/vnu.jar"
+
+   The unversioned ``~/opt/vnu/vnu.jar`` symlink supports consumers that invoke
+   the JAR directly; ``check_formatting`` itself deliberately resolves only
+   the bare ``vnu`` command from ``PATH``.  To upgrade, choose and review a new
+   exact official package version, obtain and verify its JAR digest, install it
+   into a new version-named directory, run its real integration tests, and only
+   then update the launcher and compatibility symlink.  Keep the preceding
+   directory until the new version has passed, providing an immediate rollback.
 
 *****************
 Operating modes
@@ -440,6 +507,9 @@ Backend scope matrix
    * - ``shell``
      - ``shellcheck``
      - Whole-script analysis
+   * - ``vnu``
+     - Nu Html Checker
+     - Report-only conformance analysis; no source mutation to restrict
 
 *****************
 Excluding files

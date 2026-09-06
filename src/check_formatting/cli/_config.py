@@ -25,9 +25,11 @@ _CONFIG_FILE = ".check_formatting.toml"
 # Each checker's (section, key) pair, the single source of truth for both
 # _CONFIG_SECTIONS' unknown-key validation and _load_project_config's
 # per-field lookups below — one place to update, not two kept in sync by
-# hand. Every section has exactly one key today.
+# hand. VNU has two keys; the derived table below groups repeated sections.
 _CPP: Final = ("cpp", "globs")
 _WEB: Final = ("web", "globs")
+_VNU_GLOBS: Final = ("vnu", "globs")
+_VNU_ARGS: Final = ("vnu", "args")
 _PYTHON: Final = ("python", "dirs")
 _MYPY: Final = ("mypy", "dirs")
 _JSON: Final = ("json", "files")
@@ -40,9 +42,24 @@ _RST: Final = ("rst", "dir")
 
 # Known keys per config section (project-specific paths/globs/targets).
 # Mypy may override the Python (Ruff) target set, with Python dirs as fallback.
+_CONFIG_FIELDS = (
+    _CPP,
+    _WEB,
+    _VNU_GLOBS,
+    _VNU_ARGS,
+    _PYTHON,
+    _MYPY,
+    _JSON,
+    _INI,
+    _CLANG_TIDY,
+    _KCONFIG,
+    _SHELL,
+    _YAML,
+    _RST,
+)
 _CONFIG_SECTIONS: dict[str, frozenset[str]] = {
-    section: frozenset({key})
-    for section, key in (_CPP, _WEB, _PYTHON, _MYPY, _JSON, _INI, _CLANG_TIDY, _KCONFIG, _SHELL, _YAML, _RST)
+    section: frozenset(key for field_section, key in _CONFIG_FIELDS if field_section == section)
+    for section, _ in _CONFIG_FIELDS
 }
 
 _TOP_LEVEL_KEYS = frozenset({"checks", *_CONFIG_SECTIONS})
@@ -55,6 +72,8 @@ class ProjectConfig:
     checks: list[str]
     cpp_globs: list[str]
     web_globs: list[str]
+    vnu_globs: list[str]
+    vnu_args: list[str]
     python_dirs: list[str]
     mypy_dirs: list[str]
     json_files: list[str]
@@ -125,10 +144,14 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
     _validate_check_names(checks, _CONFIG_FILE)
     python_dirs: list[str] = _optional_section(data, *_PYTHON, _require_str_list, [])
     mypy_dirs: list[str] = _optional_section(data, *_MYPY, _require_str_list, []) if "mypy" in data else python_dirs
+    vnu_table = _require_table(data, "vnu") if "vnu" in data else None
+    vnu_args = _require_str_list(vnu_table, "args", "[vnu]") if vnu_table is not None and "args" in vnu_table else []
     return ProjectConfig(
         checks=checks,
         cpp_globs=_optional_section(data, *_CPP, _require_str_list, []),
         web_globs=_optional_section(data, *_WEB, _require_str_list, []),
+        vnu_globs=_optional_section(data, *_VNU_GLOBS, _require_str_list, []),
+        vnu_args=vnu_args,
         python_dirs=python_dirs,
         mypy_dirs=mypy_dirs,
         json_files=_optional_section(data, *_JSON, _require_str_list, []),
