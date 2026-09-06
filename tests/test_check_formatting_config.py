@@ -60,6 +60,7 @@ def test_config_sections_known_keys_match_expected_schema() -> None:
     assert {
         "cpp": frozenset({"globs"}),
         "web": frozenset({"globs"}),
+        "vnu": frozenset({"globs", "args"}),
         "python": frozenset({"dirs"}),
         "mypy": frozenset({"dirs"}),
         "json": frozenset({"files"}),
