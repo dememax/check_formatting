@@ -107,6 +107,7 @@ def test_cli_package_reexports_everything_the_test_suite_patches_directly() -> N
         "_check_python",
         "_check_rst",
         "_check_shell",
+        "_check_vnu",
         "_check_web",
         "_check_yaml",
         "_checker_kwargs",
