@@ -121,6 +121,15 @@ within a section, malformed TOML, and wrong-typed values are all hard errors.
 A section for a checker not in `checks` is simply unused, not an error —
 declare only what you need.
 
+New to the tool? See
+[docs/check_formatting.rst's "Getting started" section](docs/check_formatting.rst#getting-started)
+for a backend-install-at-a-glance table, a "which checkers should I
+enable" checklist keyed by what's already in your repository, two
+complete starter configs (a pure Python package; a Meson C++/web/Python
+project) verified end to end including catching a deliberate violation,
+gradual-adoption guidance for an existing repository, and a copyable
+day-to-day workflow template for your own `CONTRIBUTING.md`.
+
 Discovery is **CWD-only**: run the tool from the project root (or pass a
 different `project_root` when calling it as a library). There is no
 parent-directory walking, matching

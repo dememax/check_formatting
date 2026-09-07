@@ -6,9 +6,9 @@
 Onboarding guide for a new adopting project
 #############################################
 
-:Status: Items 2, 3, and 5 shipped (2026-09-07). Items 1, 4, 7, 8, and 9
-   remain proposed; item 6 is a policy decision with no urgency, per its
-   own section below.
+:Status: Items 1-5 and 7-9 shipped (2026-09-07). Item 6 is a policy
+   decision with no urgency, per its own section below — the only item
+   remaining.
 :Sources: A cold-reader review of this project's own documentation
    (README.md, :doc:`../check_formatting`) from the perspective of a new
    project author adopting ``check_formatting`` for the first time, done in
@@ -214,18 +214,22 @@ Proposed work
 Add a "Getting started" section (README.md, expanded in
 :doc:`../check_formatting`) covering:
 
-1. Two or three complete starter configs for the project shapes the
-   documentation already names as target use cases. Each must be
-   demonstrated, not just valid: include the native/non-TOML prerequisites
-   it actually depends on (running from the project root; Python 3.14 on
-   ``PATH``; ``npm install`` for Prettier-backed checkers; a built/rendered
-   output directory for a checker like ``vnu`` that validates generated
-   HTML), and show it catching one deliberately introduced violation, not
-   only passing cleanly. For a repository with pre-existing, unmaintained
-   content, show the gradual-adoption path: scope the initial config to
-   files the project's own authors maintain, establish a clean baseline,
-   then broaden deliberately — not "point globs at everything, including
-   vendored or generated trees, on day one."
+1. Shipped, in :doc:`../check_formatting`'s new "Getting started" section:
+   two complete starter configs, both actually run end to end while
+   writing the docs (not just written to look plausible) — a pure Python
+   package, and a Meson C++/web/Python project — each demonstrated
+   catching a deliberately introduced violation and recovering via
+   ``--fix``, plus a third, explicitly illustrative-only CMake/Zephyr
+   config shape. Running the Meson example live surfaced a genuine,
+   previously undocumented prerequisite: the adapter always passes ``-c
+   meson.format``, so a ``meson.format`` file must exist at the project
+   root — even empty — or the checker fails immediately with
+   ``Configuration file meson.format not found``, regardless of whether
+   anything actually needs reformatting; now documented next to
+   ``meson format``'s own paragraph. Also includes the gradual-adoption
+   guidance for a pre-existing, unmaintained repository: scope the initial
+   config to files the project's own authors maintain, establish a clean
+   baseline, then broaden deliberately.
 2. Shipped, as a new "Continuous integration" section
    (:doc:`../check_formatting`, summarized in README.md): a generic CI job
    example built around the verified findings above, using ``--all``
@@ -246,9 +250,9 @@ Add a "Getting started" section (README.md, expanded in
    directory, if that differs), on either a version change or no marker
    being present at all (including the very first run after adopting this
    checker).
-4. A "which checkers should I enable" checklist, keyed by file type or
-   build system present in the adopting repository, inverse of the
-   existing Checkers table.
+4. Shipped, alongside item 1: a "which checkers should I enable" checklist,
+   keyed by file type or build system present in the adopting repository,
+   inverse of the existing Checkers table.
 5. Shipped, in :doc:`../check_formatting`'s "Excluding files" section,
    as a table grouped by verified behavior rather than a uniform checker ×
    mode × selection-mechanism grid — the actual code splits into distinct
@@ -268,21 +272,27 @@ Add a "Getting started" section (README.md, expanded in
    wrapper's own versioning. This is a decision for Maxime to make, not a
    fact this document can respond to with default a policy for, and it does
    not need to ship in the same pass as the rest of this epic.
-7. A copyable day-to-day workflow template an adopting project can drop
-   into its own ``CONTRIBUTING.md``, generalizing AGENTS.md's own
-   before-every-commit discipline into project-agnostic language.
-8. Generalize the vnu epic's "baseline broad, review, then narrow" recipe
-   into first-time-setup guidance that applies when enabling *any*
-   checker, including the gradual-adoption caveat for legacy repositories
-   from the finding above, with the vnu recipe kept as its worked example.
-9. A short backend-entry-point table — one supported install route per
-   backend, linking to the existing fuller paragraph — rather than a full
-   apt/brew/pip/npm matrix maintained for every backend.
+7. Shipped: a copyable day-to-day workflow template an adopting project
+   can drop into its own ``CONTRIBUTING.md``, including the Ruff
+   format/lint interaction found while verifying item 1 (a single
+   ``--fix`` pass doesn't always converge — a lint fix can reintroduce a
+   formatting issue only a second ``ruff format`` pass corrects) as the
+   concrete reason the template says "verify clean, re-run ``--fix`` if
+   not" rather than assuming one pass is always enough.
+8. Shipped, as the "First-time setup: baseline broad, then narrow" section:
+   the vnu epic's own recipe generalized to any checker, with the
+   gradual-adoption caveat from item 1's finding folded in, and the vnu
+   recipe kept as its cited worked example.
+9. Shipped: a short backend-entry-point table — one supported install
+   route per backend, pointing back at the existing fuller paragraph —
+   rather than a full apt/brew/pip/npm matrix maintained for every
+   backend.
 
 Pure documentation — no production code or config-schema change for items
-1-5 and 7-9, so no TDD cycle applies to those, matching item 1 of the vnu
-epic. Item 6 is a policy decision, not a documentation task, and should not
-be scheduled as if it were equally cheap.
+1-5 and 7-9, so no TDD cycle applied to those, matching item 1 of the vnu
+epic. Item 6 is a policy decision, not a documentation task, and remains
+the one open item — it should not be scheduled as if it were equally
+cheap, and has no urgency forcing it into any particular pass.
 
 ************************
 Recommended sequencing
@@ -291,13 +301,14 @@ Recommended sequencing
 Codex's review of both roadmap epics together recommended prioritizing
 this epic's tested onboarding baseline and CI example ahead of the sibling
 :doc:`new-checker-architecture-guide` epic's corrected walkthrough, with
-additional recipes and reference tables after both — adopted, and items 2,
-3, and 5 are now shipped in that order of priority. Items 1 and 9 follow
-naturally from item 2's own worked examples and remain proposed. Item 8
-depends on item 1 existing. Item 6 (the compatibility policy decision) has
-no dependency on the rest and no urgency forcing it
-into this pass — schedule it whenever Maxime is ready to commit to an
-answer, not as a checkbox alongside the documentation items.
+additional recipes and reference tables after both — adopted: items 2, 3,
+and 5 shipped first, the architecture guide shipped as
+:doc:`../architecture` next, and items 1, 4, 7, 8, and 9 shipped together
+in this final pass, in that order (1 and 9 as the worked examples the rest
+build on, 4/7/8 following naturally once those examples existed). Item 6
+(the compatibility policy decision) remains open, with no dependency on
+anything shipped and no urgency forcing it into this or any pass —
+schedule it whenever Maxime is ready to commit to an answer.
 
 **************
 Out of scope
