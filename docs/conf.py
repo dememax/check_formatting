@@ -12,7 +12,7 @@ current_year = datetime.date.today().year
 copyright_years = "2026" if current_year == 2026 else f"2026-{current_year}"
 copyright = f"{copyright_years}, {author}"
 language = "en"
-release = "0.3.0"
+release = "0.4.0"
 
 extensions: list[str] = []
 exclude_patterns = ["_build"]
