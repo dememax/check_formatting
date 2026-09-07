@@ -19,3 +19,5 @@ interface from retained design history.
    :maxdepth: 1
 
    vnu-message-suppression-ergonomics
+   new-checker-architecture-guide
+   adopter-onboarding-guide
