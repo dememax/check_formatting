@@ -165,7 +165,19 @@ gotcha, one entry per backend rather than per checker — ``prettier`` backs
 four checkers (``web``, ``json``, ``ini``, ``yaml``) and is described once.
 None of these are ``check_formatting``'s own code or Python dependencies.
 The VNU instructions below pin the exact independently installed version used
-to validate this adapter.
+to validate this adapter — unlike every other backend on this page, ``vnu``
+has no standard system or language-ecosystem package to install from at
+all: it isn't in Ubuntu's or Gentoo's package repositories (checked
+directly on both), and its only real distribution channel, the
+``vnu-jar`` npm package, uses npm merely as a convenient transport for a
+Java JAR rather than as ``vnu``'s native ecosystem the way npm genuinely
+is prettier's. Every other backend here already has an ecosystem-standard
+way to pin an exact version when one is wanted — ``apt install
+foo=1.2.3``, ``pip install foo==1.2.3``, or, for prettier specifically, a
+project's own committed ``package-lock.json`` — so this project's own
+docs don't need to invent one. For ``vnu``, nothing like that exists
+upstream, so the reproducible install-and-verify procedure below is
+supplying what the ecosystem doesn't.
 
 ``clang-format`` (``cpp``)
    Part of the LLVM toolchain.  Install via the system package manager
@@ -195,11 +207,21 @@ to validate this adapter.
    (≥ 18 recommended) and npm installed, plus the project's own
    dependencies installed from ``package.json`` at the repository root
    (``npm install``, which populates ``node_modules/``).  The wrapper
-   invokes it as ``npx prettier``, which resolves the locally installed
-   version from ``node_modules/.bin/prettier``; running it without
-   ``node_modules/`` present makes ``npx`` attempt a one-off network
-   download, which can fail offline or silently pick a different version
-   than the project pins.  ``ini`` additionally needs
+   always invokes it as ``npx --no-install prettier`` (never bare ``npx
+   prettier``), specifically so a missing dependency cannot trigger an
+   on-the-fly network install.  That flag does not, however, restrict
+   resolution to the current project's own ``node_modules/`` alone —
+   verified directly: when the project's own ``node_modules/`` is
+   present, it wins; when it is absent, ``npx --no-install`` still
+   succeeds if a matching version happens to already sit in the invoking
+   *user's shared* npm cache (``~/.npm``), left there by any unrelated
+   ``npm install``/``npx`` run on that machine with no relationship to
+   this project's own pinned version, and only fails outright if neither
+   exists.  Skipping ``npm install`` for a project that enables a
+   prettier-backed checker therefore does not reliably fail loudly — on a
+   machine whose npm cache happens to already hold some version of
+   prettier, it can silently check/format against that unrelated version
+   instead of the project's own pin.  ``ini`` additionally needs
    ``prettier-plugin-ini`` (registered in ``.prettierrc``) for its
    ``iniSpaceAroundEquals`` behavior; ``json`` auto-selects the ``json``
    or ``jsonc`` parser per file via ``.prettierrc`` overrides.
