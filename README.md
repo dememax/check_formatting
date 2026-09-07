@@ -133,6 +133,12 @@ matches only the file's basename). `--exclude PATTERN` (repeatable) adds
 an ad hoc, single-invocation exclusion without editing the committed file.
 RST is the exception: `check_rst` owns its native selection, so invoke
 `check_rst check --recursive ... --exclude ...` directly for an excluded RST audit.
+Most checkers apply this in every mode, including ordinary check mode with
+the default auto-detected scope, not only under `--fix`/`--diff` or explicit
+files — `meson`/`web` and `python`/`mypy` are exceptions with their own
+narrower rules. See
+[docs/check_formatting.rst's "Excluding files" table](docs/check_formatting.rst#excluding-files)
+for the exact rule per checker.
 
 ## Checkers
 
@@ -322,6 +328,29 @@ scans retain ordinary `check_rst fix` because those scopes deliberately request
 whole-file validation. An RST `--all` run without `[rst].dir` is an error;
 the tool never silently substitutes a changed-file scan for a requested full
 scan.
+
+## Continuous integration
+
+**Use `--all` (or explicit files), not a bare invocation, for any CI job
+gating a clean checkout.** A bare invocation only selects files changed
+since `HEAD` plus untracked files — on a freshly cloned or freshly
+committed checkout that set is empty by definition, so it trivially
+reports success regardless of what the checkout actually contains
+(verified: a syntax-broken, already-committed Python file goes completely
+undetected by `check_formatting --json`, and is caught only by
+`check_formatting --all --json`). `--json` also does not wrap every
+failure in JSON — a missing or malformed `.check_formatting.toml` prints
+plain text and exits 1 without ever producing JSON, so a consuming script
+must check the exit status (or catch a JSON decode failure), not call
+`json.loads()` on stdout unconditionally.
+
+See
+[docs/check_formatting.rst's "Continuous integration" section](docs/check_formatting.rst#continuous-integration)
+for a complete CI job example, a verified JSON-consumption script, and a
+pre-commit hook example — including why letting `check_formatting` do its
+own git-based file selection (rather than passing it pre-commit's matched
+filenames) preserves the native/best-effort git-scoped-fix optimizations
+above.
 
 ## License
 

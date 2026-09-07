@@ -209,6 +209,19 @@ to validate this adapter.
    the consuming project's ``pyproject.toml`` — entirely independent of
    ``.check_formatting.toml``.
 
+   Before running, the adapter wipes the project-root ``.mypy_cache``
+   directory it manages — not any different cache directory a project's own
+   ``[tool.mypy]``/``mypy.ini`` might configure — whenever the resolved
+   ``mypy``'s version differs from a marker recorded inside that cache, or
+   when no marker is present at all (including the first run after adopting
+   this checker, or a pre-existing cache from before this behavior
+   existed).  mypy's incremental cache format is version-dependent; reusing
+   one written by a different version can silently produce wrong results,
+   so a wipe is the safe default rather than every-run overhead.  A CI job
+   that caches ``.mypy_cache`` across runs to speed up ``mypy`` should
+   expect this cache to be invalidated wholesale on any ``mypy`` version
+   bump, and on the very first cached run.
+
 ``check_rst`` (``rst``)
    A standalone RST/Sphinx linter and fixer, installed and versioned
    separately from ``check_formatting`` and resolved from ``PATH``.  A
@@ -570,18 +583,50 @@ Excluding files
    Additional exclusions for the ``clang-tidy`` checker, useful for translation
    units that cannot be analyzed but remain valid ``clang-format`` targets.
 
-Backend limitations affect full-scan exclusions.  RST uses ``check_rst``'s own
-selection and does not receive either wrapper exclusion mechanism; invoke
-``check_rst check --recursive ... --exclude ...`` directly for an excluded RST tree
-audit.  Meson and Web delegate their non-explicit-file check and verbose modes
-to a single batched backend command that cannot filter individual files;
-``.formatting-ignore`` applies to them only in diff, fix, and explicit-file
-modes, so use ``.prettierignore`` for finer-grained web exclusions there.
-Python is scoped to ``[python].dirs`` directly, in every mode, whenever no
-explicit files are given, so ``.formatting-ignore`` never applies to it
-without explicit files; use ``[tool.ruff.exclude]`` in ``pyproject.toml``
-instead.  Explicit-file, diff, and fix paths can apply the wrapper's per-file
-filtering directly for other checkers.
+Whether ``.formatting-ignore``/``--exclude`` actually take effect depends on
+*both* the checker and the selection mechanism (auto-detected default scope,
+explicit ``-- FILE`` arguments, or ``--all``) — not on the operating mode
+alone.  The default, git-auto-detected scope already resolves to a concrete
+file list before any checker runs, so most checkers apply wrapper exclusions
+there too, in ordinary check mode, not only under ``--fix``/``--diff`` or
+explicit files:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 46 38
+
+   * - Checker(s)
+     - When ``.formatting-ignore``/``--exclude`` apply
+     - Native alternative
+   * - ``cpp``, ``cmake``, ``json``, ``ini``, ``yaml``, ``shell``, ``vnu``
+     - Always — every mode, every selection mechanism including ``--all``.
+       Each always resolves a concrete per-file list before invoking its
+       backend.
+     - —
+   * - ``meson``, ``web``
+     - Fix, diff, and explicit-file modes always; check/verbose mode only
+       when a concrete selection already exists (auto-detected default
+       scope or explicit files).  ``--all``'s check/verbose mode hands
+       globs/recursive discovery directly to the backend as one batched
+       command, with no per-file list to filter.
+     - ``.prettierignore`` (web)
+   * - ``python``, ``mypy``
+     - Every mode, whenever a concrete selection exists (auto-detected
+       default scope or explicit files).  Never under ``--all``, in any
+       mode — ``[python].dirs``/``[mypy].dirs`` are handed to the backend
+       directly.
+     - ``[tool.ruff.exclude]`` in ``pyproject.toml``
+   * - ``rst``
+     - Never — check_rst owns its own native selection entirely.
+     - ``check_rst check --recursive ... --exclude ...`` directly
+   * - ``clang-tidy``
+     - Same as ``cpp`` (shares ``[cpp].globs``), plus its own separate file
+       below.
+     - ``.clang-tidy-ignore``
+   * - ``kconfig``
+     - N/A — validates merged Kconfig state across every ``.conf`` file
+       together, not a per-file selection.
+     - —
 
 *******
 Usage
@@ -618,6 +663,131 @@ Usage
 
    # Produce a machine-readable report
    check_formatting --json
+
+************************
+Continuous integration
+************************
+
+A CI job gating a clean checkout must use ``--all`` (or explicit files) —
+this is not optional.  The default, git-auto-detected scope only selects
+files changed since ``HEAD`` plus untracked files; on a freshly cloned or
+freshly committed checkout that set is empty by definition, so a bare
+invocation trivially reports success regardless of what the checkout
+actually contains.  Reproduced directly, on a checkout with a real,
+already-committed syntax error::
+
+   $ check_formatting --json
+   {"config_source": ".check_formatting.toml", "mode": "check", "checks": [],
+    "results": {}, "summary": {"total": 0, "passed": 0, "failed": 0}, "overall_ok": true}
+   $ echo $?
+   0
+
+   $ check_formatting --all --json
+   {"config_source": ".check_formatting.toml", "mode": "check", "checks": ["python"],
+    "results": {"python": {"label": "ruff (Python)", "ok": false, "output": "..."}},
+    "summary": {"total": 1, "passed": 0, "failed": 1}, "overall_ok": false}
+   $ echo $?
+   1
+
+Because ``--all`` scans by configured globs/dirs rather than Git state, a
+shallow, single-commit checkout is sufficient in CI — no
+``fetch-depth: 0`` or equivalent is needed the way it would be for a
+diff-based check.
+
+``--json`` does not wrap every failure mode in JSON.  A configuration
+error (a missing or malformed ``.check_formatting.toml``) prints plain
+text and exits 1 without ever entering the JSON envelope::
+
+   $ check_formatting --json   # malformed .check_formatting.toml
+   check_formatting: invalid .check_formatting.toml: Invalid value (at end of document)
+   $ echo $?
+   1
+
+A script consuming ``--json`` output must account for this — check the
+exit status, or catch a JSON decode failure — rather than calling
+``json.loads()`` on stdout unconditionally:
+
+.. code-block:: python
+
+   import json
+   import subprocess
+   import sys
+
+   result = subprocess.run(
+       ["check_formatting", "--all", "--json"],
+       capture_output=True,
+       text=True,
+   )
+   try:
+       payload = json.loads(result.stdout)
+   except json.JSONDecodeError:
+       # A config-load error prints plain text and exits 1 without ever
+       # producing JSON.
+       sys.stderr.write(result.stdout)
+       sys.exit(result.returncode or 1)
+
+   if not payload["overall_ok"]:
+       for name, entry in payload["results"].items():
+           if not entry["ok"]:
+               print(f"FAILED: {entry['label']}")
+       sys.exit(1)
+
+A generic CI job (illustrative — adapt the install step to the backends
+your own ``checks`` list actually needs):
+
+.. code-block:: yaml
+
+   # .github/workflows/check_formatting.yml
+   jobs:
+     check_formatting:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-python@v5
+           with:
+             python-version: "3.14"
+         - run: python3.14 -m pip install check-formatting
+         # npm install, apt-get install <backend>, etc. — only for the
+         # backends this project's own checks list enables
+         - run: python3.14 ci_check.py  # the script above; it invokes check_formatting --all --json itself
+
+For a pre-commit hook, two decisions are worth making explicitly rather
+than leaving them implicit:
+
+.. code-block:: yaml
+
+   # .pre-commit-config.yaml — recommended: let check_formatting select its own scope
+   - repo: local
+     hooks:
+       - id: check_formatting
+         name: check_formatting
+         entry: check_formatting
+         language: system
+         pass_filenames: false
+         always_run: true
+
+``pass_filenames: false`` plus ``always_run: true`` invokes
+``check_formatting`` bare, letting it perform its own git-based
+auto-detection rather than receiving pre-commit's matched filenames as
+explicit arguments.  This matters because passing filenames explicitly
+sets ``explicit_files`` to a concrete list the tool did not derive from
+Git itself — which disables the native/best-effort git-scoped-fix
+optimizations some checkers use (``cpp``'s native ``-lines=``,
+``rst``'s ``fix --fast``, the Prettier-backed checkers' best-effort hunk
+reconstruction), falling back to whole-file processing for those checkers
+instead.  Bare invocation avoids that cost entirely, and composes cleanly
+with pre-commit's own behavior: pre-commit "only runs on the staged
+contents of files by temporarily stashing the unstaged changes while
+running hooks" (`pre-commit's own documentation
+<https://pre-commit.com/#pre-commit-during-commits>`_), so the working
+tree at hook-run time already matches the would-be commit — including a
+partially staged file, where only its staged hunks are present — and
+``check_formatting``'s own "changed since ``HEAD``" detection naturally
+captures exactly that.  Passing filenames explicitly
+(``pass_filenames: true``, pre-commit's own default) remains a reasonable
+choice for a team that specifically wants pre-commit's own ``files``/``types``
+matching instead of relying on ``.check_formatting.toml``'s configured
+globs, at the cost above.
 
 *************
 Exit status

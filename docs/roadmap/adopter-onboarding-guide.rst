@@ -6,7 +6,9 @@
 Onboarding guide for a new adopting project
 #############################################
 
-:Status: Proposed.
+:Status: Items 2, 3, and 5 shipped (2026-09-07). Items 1, 4, 7, 8, and 9
+   remain proposed; item 6 is a policy decision with no urgency, per its
+   own section below.
 :Sources: A cold-reader review of this project's own documentation
    (README.md, :doc:`../check_formatting`) from the perspective of a new
    project author adopting ``check_formatting`` for the first time, done in
@@ -224,39 +226,40 @@ Add a "Getting started" section (README.md, expanded in
    files the project's own authors maintain, establish a clean baseline,
    then broaden deliberately — not "point globs at everything, including
    vendored or generated trees, on day one."
-2. A CI-integration example built around the verified findings above, not
-   the naive version: use ``--all`` (or explicit files) for any CI job
-   meant to gate a clean checkout — a bare invocation measures
-   working-tree changes, not the commit under test, and silently passes
-   with nothing selected otherwise. Show a pre-commit hook alongside it,
-   with two decisions made explicitly rather than left implicit: whether
-   the hook passes it the staged filenames (which changes checkers' native
-   git-scoped-fix behavior — explicit files bypass the auto-detected-scope
-   optimizations some checkers use) or lets ``check_formatting`` do its own
-   git-aware selection, and a note that pre-commit itself temporarily
-   stashes unstaged changes during a hook run (see `pre-commit's own docs
-   <https://pre-commit.com/#pre-commit-during-commits>`_) — a partially
-   staged file is worth testing explicitly, not assumed to behave like a
-   fully staged one. Show ``--json`` consumed by a script, including
-   handling the confirmed gap: a configuration error prints plain text and
-   exits 1 without ever producing JSON, so a consuming script must check
-   the exit status (or catch a JSON decode failure) before assuming
-   parseable output, not call ``json.loads()`` unconditionally.
-3. Document the mypy-cache invalidation behavior precisely next to
-   ``mypy``'s existing paragraph: it wipes the project-root
-   ``.mypy_cache`` this wrapper itself manages (not a project's own
-   configured mypy cache directory, if that differs), on either a version
-   change or no marker being present at all (including the very first run
-   after adopting this checker) — relevant to any CI cache configuration
-   keying on that directory.
+2. Shipped, as a new "Continuous integration" section
+   (:doc:`../check_formatting`, summarized in README.md): a generic CI job
+   example built around the verified findings above, using ``--all``
+   (never a bare invocation) to gate a clean checkout; a verified
+   Python JSON-consumption script that catches the config-error-bypasses-JSON
+   gap rather than calling ``json.loads()`` unconditionally (run against
+   three real scenarios — malformed config, a real committed failure, a
+   clean repo — not just written to look plausible); and a pre-commit hook
+   recommending bare invocation (``pass_filenames: false``,
+   ``always_run: true``) over passing matched filenames, with the
+   git-scoped-fix trade-off and pre-commit's own stash-during-commit
+   behavior (confirmed against `pre-commit's own docs
+   <https://pre-commit.com/#pre-commit-during-commits>`_) both explained
+   as the reasoning, not just asserted.
+3. Shipped, next to ``mypy``'s existing paragraph in
+   :doc:`../check_formatting`: it wipes the project-root ``.mypy_cache``
+   this wrapper itself manages (not a project's own configured mypy cache
+   directory, if that differs), on either a version change or no marker
+   being present at all (including the very first run after adopting this
+   checker).
 4. A "which checkers should I enable" checklist, keyed by file type or
    build system present in the adopting repository, inverse of the
    existing Checkers table.
-5. Rebuild the ``.formatting-ignore`` exceptions as one **checker × mode ×
-   selection-mechanism** table (auto-detected / explicit files / ``--all``),
-   correcting the current checker × mode framing, and name each checker's
-   native ignore mechanism alongside the wrapper's own exclusion options
-   rather than only as an aside.
+5. Shipped, in :doc:`../check_formatting`'s "Excluding files" section,
+   as a table grouped by verified behavior rather than a uniform checker ×
+   mode × selection-mechanism grid — the actual code splits into distinct
+   families, not one shared pattern: most checkers (``cpp``, ``cmake``,
+   ``json``, ``ini``, ``yaml``, ``shell``, ``vnu``) apply
+   ``.formatting-ignore`` in every mode and every selection, including
+   ``--all``; ``meson``/``web`` skip it only in check/verbose mode under
+   ``--all`` specifically (their single-batched-command path); ``python``/
+   ``mypy`` apply it whenever a concrete selection exists but never under
+   ``--all`` in any mode; ``rst`` never uses it at all. Each row also names
+   the checker's own native alternative alongside the wrapper's exclusion.
 6. Decide, not merely document, a compatibility policy for
    ``.check_formatting.toml`` and the ``--json`` payload shape across
    ``check_formatting`` version bumps: what a pre-1.0 breaking change looks
@@ -288,15 +291,11 @@ Recommended sequencing
 Codex's review of both roadmap epics together recommended prioritizing
 this epic's tested onboarding baseline and CI example ahead of the sibling
 :doc:`new-checker-architecture-guide` epic's corrected walkthrough, with
-additional recipes and reference tables after both — adopted here. Within
-this epic: item 2 (the CI/pre-commit example) is now the highest-value,
-highest-risk-if-wrong piece, given this revision's own findings about what
-a naive version would have shipped — do it first, and verify each claimed
-behavior the way this revision did rather than trusting prose alone. Items
-3 and 5 are cheap, standalone, already-verified facts, worth shipping
-alongside it. Items 1 and 9 follow naturally from item 2's own worked
-examples. Item 8 depends on item 1 existing. Item 6 (the compatibility
-policy decision) has no dependency on the rest and no urgency forcing it
+additional recipes and reference tables after both — adopted, and items 2,
+3, and 5 are now shipped in that order of priority. Items 1 and 9 follow
+naturally from item 2's own worked examples and remain proposed. Item 8
+depends on item 1 existing. Item 6 (the compatibility policy decision) has
+no dependency on the rest and no urgency forcing it
 into this pass — schedule it whenever Maxime is ready to commit to an
 answer, not as a checkbox alongside the documentation items.
 
