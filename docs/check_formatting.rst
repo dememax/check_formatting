@@ -174,6 +174,73 @@ project-local routes serve different deployment models; ``check_formatting``
 does not search either specially and runs whichever executable its invocation
 environment resolves.
 
+=======================
+Backend compatibility
+=======================
+
+Installing a backend is not enough by itself: ``check_formatting`` is an
+adapter around that backend's command-line API.  Before running a known
+backend command, it therefore probes the resolved executable's version and
+requires the compatibility contract below.  An installed version outside the
+contract, or version output the adapter cannot recognize, fails that checker
+before its real command runs and reports the resolved binary, detected version
+or raw output, and supported contract.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 32 40
+
+   * - Backend
+     - Used by checker(s)
+     - Supported versions
+   * - ``clang-format``
+     - ``cpp``
+     - ``>=21.0.0,<24.0.0``
+   * - ``meson``
+     - ``meson``
+     - ``>=1.5.0,<2.0.0``
+   * - ``prettier``
+     - ``web``, ``json``, ``ini``, ``yaml``
+     - ``>=3.0.0,<4.0.0``
+   * - ``ruff``
+     - ``python``
+     - ``>=0.16.5,<0.17.0``
+   * - ``mypy``
+     - ``mypy``
+     - ``>=1.19.0,<3.0.0``
+   * - ``check_rst``
+     - ``rst``
+     - ``>=0.5.0,<0.6.0``
+   * - ``clang-tidy``
+     - ``clang-tidy``
+     - ``>=21.0.0,<24.0.0``
+   * - ``cmake-format``
+     - ``cmake``
+     - ``>=0.6.13,<0.7.0``
+   * - ``west``
+     - ``kconfig``
+     - ``>=1.5.0,<2.0.0``
+   * - ``shellcheck``
+     - ``shell``
+     - ``>=0.11.0,<0.12.0``
+   * - ``vnu``
+     - ``vnu``
+     - ``==26.9.5``
+
+These are adapter support boundaries, not a substitute for reproducible
+dependency management.  A consuming project should still pin one exact
+backend version inside the relevant interval in its package lock file, CI
+image, or system manifest.  ``vnu`` is intentionally stricter: this adapter
+accepts only the exact artifact documented below because its diagnostic and
+suppression behavior was verified against that release.
+
+Each resolved backend is probed only once per project root during one public
+``check_formatting`` invocation.  Independent probes remain concurrent with
+the checkers that need them, and a later invocation probes again so an updated
+executable at the same path cannot inherit stale process-local state.  Unknown
+commands used as checker plumbing are not version-gated, and a missing command
+continues through the ordinary missing-backend diagnostic path.
+
 ``clang-format`` (``cpp``)
    Part of the LLVM toolchain.  Install via the system package manager
    (``sudo apt install clang-format`` on Debian/Ubuntu, ``brew install
@@ -358,8 +425,9 @@ environment resolves.
         ".*Trailing slash on void elements has no effect and interacts badly with unquoted attribute values.*",
       ]
 
-   Version ``26.9.5`` (upstream commit ``a9333cb``) is the version installed
-   and integration-tested on this host.  Its ``vnu.jar`` SHA-256 is
+   Version ``26.9.5`` (upstream commit ``a9333cb``) is the only version this
+   adapter accepts and is integration-tested on this host.  Its ``vnu.jar``
+   SHA-256 is
    ``b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756``.
    Install that exact official ``vnu-jar`` package into ``~/opt``; npm is used
    only to acquire and integrity-check the versioned package, while the

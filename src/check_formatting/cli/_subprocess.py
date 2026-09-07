@@ -77,6 +77,10 @@ def _run(cmd: list[str], cwd: pathlib.Path) -> int:
     int
         Exit code of the subprocess.
     """
+    version_error = cli._backend_version_error(cmd, cwd)
+    if version_error is not None:
+        print(version_error)
+        return 126
     try:
         proc = subprocess.Popen(
             cmd,
@@ -109,6 +113,10 @@ def _fmt_stdout(cmd: list[str], cwd: pathlib.Path, *, input_text: str | None = N
     tuple[int, str]
         Exit code and captured stdout of the subprocess.
     """
+    version_error = cli._backend_version_error(cmd, cwd)
+    if version_error is not None:
+        print(version_error)
+        return 126, ""
     try:
         result = subprocess.run(
             cmd,
@@ -138,6 +146,9 @@ def _run_capture_merged(cmd: list[str], cwd: pathlib.Path) -> subprocess.Complet
     expected optional-backend absence escape through a worker future as a
     traceback.
     """
+    version_error = cli._backend_version_error(cmd, cwd)
+    if version_error is not None:
+        return subprocess.CompletedProcess(cmd, 126, stdout=f"{version_error}\n")
     try:
         return subprocess.run(
             cmd,

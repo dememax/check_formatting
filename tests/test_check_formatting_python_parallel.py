@@ -116,6 +116,7 @@ def test_check_python_missing_ruff_fails_cleanly_without_traceback(
     def missing_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise FileNotFoundError(2, "No such file or directory", "ruff")
 
+    monkeypatch.setattr(check_formatting, "_backend_version_error", lambda command, cwd: None)
     monkeypatch.setattr(subprocess, "run", missing_run)
 
     ok = check_formatting._check_python(tmp_path, dirs=["src"])

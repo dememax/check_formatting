@@ -420,6 +420,10 @@ import pathlib
 import sys
 from typing import TYPE_CHECKING
 
+from check_formatting.cli._backend_versions import (
+    _backend_version_error,
+    _clear_backend_version_cache,
+)
 from check_formatting.cli._checkers import (
     _MYPY_CACHE_VERSION_MARKER,
     _check_clang_tidy,
@@ -499,6 +503,7 @@ __all__ = [
     "_MYPY_CACHE_VERSION_MARKER",
     "Checker",
     "ProjectConfig",
+    "_backend_version_error",
     "_bare_scoped",
     "_batched_git_diff_hunk_ranges",
     "_best_effort_prettier_fix",
@@ -518,6 +523,7 @@ __all__ = [
     "_check_web",
     "_check_yaml",
     "_checker_kwargs",
+    "_clear_backend_version_cache",
     "_config_error",
     "_detect_changed_files",
     "_echo_project_config",
@@ -687,6 +693,7 @@ def check_formatting(
     bool
         ``True`` if every checker passed, ``False`` otherwise.
     """
+    _clear_backend_version_cache()
     effective_quiet = quiet or as_json
     log = _make_log(effective_quiet)
     root = pathlib.Path(project_root)

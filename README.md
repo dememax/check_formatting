@@ -79,6 +79,15 @@ backend on `PATH` (clang-format, `npx`+prettier, ruff, mypy, etc.) — only
 for the checkers a given project actually enables. These backends are not
 Python package dependencies and are therefore not installed by pip.
 
+Because the utility depends on each backend's command-line API, it checks the
+resolved executable before use and rejects unsupported or unrecognizable
+versions. A consuming project should pin an exact backend version inside the
+supported interval; these compatibility intervals are not dependency locks.
+The current contracts range from `>=21.0.0,<24.0.0` for LLVM tools to the
+exact `vnu==26.9.5`. See the
+[backend compatibility table](docs/check_formatting.rst#backend-compatibility)
+for every backend and the diagnostic behavior.
+
 To update a normal installation after updating the checkout:
 
 ```bash

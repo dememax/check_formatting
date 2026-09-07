@@ -33,6 +33,14 @@ project-local ``.venv`` itself. A caller that intentionally wants a
 project-scoped tool must expose it through ``PATH`` before invoking the
 utility.
 
+Runtime compatibility is now a separate, shipped layer on top of this
+installation policy: every backend has a version probe and explicit supported
+CLI interval in :doc:`../check_formatting`'s "Backend compatibility" section.
+The interval tells the adapter which CLI versions it understands; it does not
+choose, install, or pin a backend for a consuming project.  This epic's
+remaining proposed work concerns that installation and pinning guidance, so
+its status remains Proposed rather than being closed by the runtime feature.
+
 That single mechanism turns out to cover every backend already — this
 session's own research (below) found a legitimate, ecosystem-native,
 per-project pinning route for all of them. What's missing is not

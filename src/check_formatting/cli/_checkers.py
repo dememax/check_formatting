@@ -415,18 +415,18 @@ def _check_web(
         label = _file_count_label(len(web_files), excluded)
         if git_auto_detected:
             if verbose:
-                cli._print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+                cli._print_tool_info("npx", cwd=root, version_args=["--no-install", "prettier", "--version"])
             log(f"▶ npx prettier --check (git-scoped)  {label}")
             return _report_prettier_files_git_scoped(web_files, root, show_diff=False, log=log)
         # check/verbose with explicit files: pass paths directly, not globs
         cmd = ["npx", "--no-install", "prettier", "--check"]
         if verbose:
-            cli._print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+            cli._print_tool_info("npx", cwd=root, version_args=["--no-install", "prettier", "--version"])
             cmd += ["--log-level", "log"]
         log(f"▶ npx prettier --check  {label}")
         return cli._run(cmd + [str(f) for f in web_files], cwd=root) == 0
     if verbose:
-        cli._print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+        cli._print_tool_info("npx", cwd=root, version_args=["--no-install", "prettier", "--version"])
         log(f"▶ npx prettier --check --log-level log {globs_display}")
         return cli._run(["npx", "--no-install", "prettier", "--check", "--log-level", "log", *globs], cwd=root) == 0
     log(f"▶ npx prettier --check {globs_display}")
@@ -598,12 +598,12 @@ def _dispatch_prettier_checker(
         return _prettier_diff(files, root)
     if git_auto_detected:
         if verbose:
-            cli._print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+            cli._print_tool_info("npx", cwd=root, version_args=["--no-install", "prettier", "--version"])
         log(f"▶ npx prettier --check (git-scoped)  {label}")
         return _report_prettier_files_git_scoped(files, root, show_diff=False, log=log)
     str_files = [str(f) for f in files]
     if verbose:
-        cli._print_tool_info("npx", cwd=root, version_args=["prettier", "--version"])
+        cli._print_tool_info("npx", cwd=root, version_args=["--no-install", "prettier", "--version"])
         log(f"▶ npx prettier --check --log-level log  {label}")
         return cli._run(["npx", "--no-install", "prettier", "--check", "--log-level", "log", *str_files], cwd=root) == 0
     log(f"▶ npx prettier --check  {label}")

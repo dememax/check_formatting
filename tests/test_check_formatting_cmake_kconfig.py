@@ -139,6 +139,7 @@ def test_kconfig_build_combos_missing_label_is_hard_error(tmp_path: Path, capsys
 def test_check_kconfig_passes_when_no_warnings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = tmp_path
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/west")
+    monkeypatch.setattr(check_formatting, "_backend_version_error", lambda command, cwd: None)
 
     class _FakeResult:
         returncode = 0
@@ -155,6 +156,7 @@ def test_check_kconfig_passes_when_no_warnings(tmp_path: Path, monkeypatch: pyte
 def test_check_kconfig_fails_on_warning_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = tmp_path
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/west")
+    monkeypatch.setattr(check_formatting, "_backend_version_error", lambda command, cwd: None)
 
     class _FakeResult:
         returncode = 0
@@ -178,6 +180,7 @@ def test_check_kconfig_missing_west_binary_fails_cleanly_without_traceback(
     normal failed check, not an internal traceback out of the worker future."""
     root = tmp_path
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/west")
+    monkeypatch.setattr(check_formatting, "_backend_version_error", lambda command, cwd: None)
 
     def missing_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise FileNotFoundError(2, "No such file or directory", "west")

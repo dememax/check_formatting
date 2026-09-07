@@ -5,7 +5,10 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import pytest
@@ -62,32 +65,93 @@ def test_extract_backend_version(backend: str, raw_output: str, expected: tuple[
     assert _backend_versions._extract_backend_version(policy, raw_output) == expected
 
 
+@pytest.mark.parametrize("backend", _backend_versions._BACKEND_VERSION_POLICIES)
+def test_installed_backend_version_is_accepted(backend: str, tmp_path: Path) -> None:
+    """Exercise real version output when an optional backend is available."""
+    policy = _backend_versions._BACKEND_VERSION_POLICIES[backend]
+    resolved_launcher = shutil.which(policy.command_prefix[0])
+    if resolved_launcher is None:
+        pytest.skip(f"{policy.display_name} is not installed")
+    try:
+        probe = subprocess.run(
+            [resolved_launcher, *policy.version_args],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=2,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.skip(f"{policy.display_name} is unavailable from this project root")
+    if probe.returncode != 0:
+        pytest.skip(f"{policy.display_name} is unavailable from this project root")
+
+    command = [*policy.command_prefix, "placeholder"]
+    assert _backend_versions._backend_version_error(command, tmp_path) is None
+
+
 def test_supported_backend_version_is_queried_once_and_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
-    monkeypatch.setattr(_backend_versions.shutil, "which", lambda command: f"/usr/bin/{command}")
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         return subprocess.CompletedProcess(command, 0, stdout="ruff 0.16.6\n", stderr="")
 
-    monkeypatch.setattr(_backend_versions.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert _backend_versions._ensure_supported_backend(["ruff", "format", "--check", "src"], tmp_path) is True
     assert _backend_versions._ensure_supported_backend(["ruff", "check", "src"], tmp_path) is True
     assert calls == [["/usr/bin/ruff", "--version"]]
 
 
+def test_public_check_starts_with_a_fresh_backend_version_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".check_formatting.toml").write_text("checks = []\n")
+    calls = 0
+
+    def fake_clear() -> None:
+        nonlocal calls
+        calls += 1
+
+    monkeypatch.setattr(check_formatting, "_clear_backend_version_cache", fake_clear)
+
+    assert check_formatting.check_formatting(tmp_path, explicit_files=[]) is True
+    assert calls == 1
+
+
+def test_different_backend_version_probes_can_run_concurrently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rendezvous = threading.Barrier(2)
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        rendezvous.wait(timeout=2)
+        output = "ruff 0.16.5\n" if command[0].endswith("ruff") else "version: 0.11.0\n"
+        return subprocess.CompletedProcess(command, 0, stdout=output, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        ruff = executor.submit(_backend_versions._ensure_supported_backend, ["ruff", "check", "src"], tmp_path)
+        shell = executor.submit(_backend_versions._ensure_supported_backend, ["shellcheck", "script.sh"], tmp_path)
+
+    assert ruff.result() is True
+    assert shell.result() is True
+
+
 def test_prettier_version_probe_uses_the_same_no_install_resolution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[list[str]] = []
-    monkeypatch.setattr(_backend_versions.shutil, "which", lambda command: f"/usr/bin/{command}")
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         return subprocess.CompletedProcess(command, 0, stdout="3.9.6\n", stderr="")
 
-    monkeypatch.setattr(_backend_versions.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert (
         _backend_versions._ensure_supported_backend(
@@ -140,9 +204,9 @@ def test_unsupported_backend_version_fails_clearly(
 ) -> None:
     policy = _backend_versions._BACKEND_VERSION_POLICIES[backend]
     launcher = policy.command_prefix[0]
-    monkeypatch.setattr(_backend_versions.shutil, "which", lambda command: f"/usr/bin/{command}")
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
     monkeypatch.setattr(
-        _backend_versions.subprocess,
+        subprocess,
         "run",
         lambda command, **kwargs: subprocess.CompletedProcess(command, 0, stdout=raw_output, stderr=""),
     )
@@ -159,9 +223,9 @@ def test_unsupported_backend_version_fails_clearly(
 def test_unparseable_backend_version_fails_clearly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(_backend_versions.shutil, "which", lambda command: f"/usr/bin/{command}")
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
     monkeypatch.setattr(
-        _backend_versions.subprocess,
+        subprocess,
         "run",
         lambda command, **kwargs: subprocess.CompletedProcess(command, 0, stdout="mystery build\n", stderr=""),
     )
@@ -174,7 +238,7 @@ def test_unparseable_backend_version_fails_clearly(
 
 def test_unknown_command_has_no_version_policy_or_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        _backend_versions.subprocess,
+        subprocess,
         "run",
         lambda *args, **kwargs: pytest.fail("an unrelated command must not trigger a backend version probe"),
     )
@@ -186,7 +250,11 @@ def test_unknown_command_has_no_version_policy_or_probe(tmp_path: Path, monkeypa
 def test_subprocess_helpers_refuse_an_unsupported_backend_before_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runner: str
 ) -> None:
-    monkeypatch.setattr(check_formatting, "_ensure_supported_backend", lambda command, cwd: False)
+    monkeypatch.setattr(
+        check_formatting,
+        "_backend_version_error",
+        lambda command, cwd: "ERROR: unsupported backend version",
+    )
     monkeypatch.setattr(
         subprocess,
         "Popen",
@@ -208,3 +276,26 @@ def test_subprocess_helpers_refuse_an_unsupported_backend_before_execution(
         assert isinstance(result, subprocess.CompletedProcess)
         assert result.returncode == 126
         assert "unsupported backend version" in result.stdout
+
+
+def test_capture_runner_keeps_specific_backend_version_error_in_its_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="West version: v2.0.0\n",
+            stderr="",
+        ),
+    )
+
+    result = check_formatting._run_capture_merged(["west", "build"], tmp_path)
+
+    assert result.returncode == 126
+    assert "unsupported West version 2.0.0" in result.stdout
+    assert ">=1.5.0,<2.0.0" in result.stdout
+    assert capsys.readouterr().out == ""

@@ -54,6 +54,10 @@ Package layout
      - Subprocess dispatch (``_run``, ``_run_capture_merged``,
        ``_fmt_stdout``) and the thread-local output buffer
        (``_ThreadLocalStdout``) concurrent dispatch installs.
+   * - ``_backend_versions.py``
+     - External CLI version parsing, compatibility policies, and the
+       invocation-local, concurrency-safe probe cache used by every shared
+       subprocess helper.
    * - ``_prettier.py``
      - Shared Prettier plumbing: the best-effort git-scoped fix
        reconstruction algorithm, used by ``web``/``json``/``ini``/``yaml``.
@@ -81,9 +85,10 @@ to monkeypatch it.
 Registering a new checker
 ===========================
 
-Exactly three production files make up the registration surface, each a
-different kind of change (tests and user/contributor documentation are
-additional required work):
+Three production files always make up the registration surface, each a
+different kind of change.  A fourth is required when the checker introduces
+a new external CLI (tests and user/contributor documentation are additional
+required work):
 
 #. ``_config.py`` — add the section/key ``Final`` tuple(s) to
    ``_CONFIG_FIELDS`` (this alone gives the new section's unknown-key and
@@ -93,6 +98,9 @@ additional required work):
    ``Checker(label, fn, kwargs_fn, fix_command_fn, auto_fix)`` entry to
    ``_CHECKERS``.
 #. ``_checkers.py`` — the ``_check_X`` function itself.
+#. ``_backend_versions.py`` — for a new external CLI, add its version probe,
+   parser, and deliberately reviewed supported interval.  Reusing an existing
+   backend needs no new policy entry.
 
 ``cli/__init__.py`` needs **no edit**: it imports ``_CHECKERS`` once from
 ``_registry.py`` and re-exports it via ``__all__``; both are already done,
@@ -202,6 +210,20 @@ three different situations:
      - Captures only stdout, optionally feeding stdin — used for
        diff-mode previews and Prettier's canonical-equivalence check in
        ``_prettier.py``.
+
+All three helpers first consult ``_backend_versions.py`` when the command is
+a registered external backend.  Keep that gate in the shared helper instead
+of duplicating it in checker functions: one public invocation probes each
+resolved backend/root once, simultaneous requests for that same probe share
+one result, and unrelated backend probes can proceed concurrently.
+
+The output contract still differs by helper.  ``_run`` and ``_fmt_stdout``
+print a compatibility diagnostic into the checker's normal captured stream;
+``_run_capture_merged`` returns that diagnostic in its
+``CompletedProcess.stdout`` without printing it.  The latter distinction is
+required for a checker's own worker threads, which are not registered with
+the outer thread-local stdout capture and would otherwise leak or interleave
+output.
 
 ==============================
 ``print()`` versus ``log()``
@@ -417,6 +439,9 @@ Before considering a new checker done, demonstrate each of the following
 * Any diagnostic the checker prints for a failure survives ``--quiet`` and
   is present inside the ``--json`` payload's per-checker ``output``.
 * An analysis-only checker (no fix mode) registers ``auto_fix=False``.
+* Every new external CLI has a tested version parser and explicit support
+  contract in ``_backend_versions.py``; installed-but-unsupported versions
+  fail before the backend's real command executes.
 * The implementation was written RED (a failing test) before GREEN (the
   checker code) — commit them separately, per ``AGENTS.md``'s own
   granularity convention.

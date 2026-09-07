@@ -264,14 +264,13 @@ Add a "Getting started" section (README.md, expanded in
    ``mypy`` apply it whenever a concrete selection exists but never under
    ``--all`` in any mode; ``rst`` never uses it at all. Each row also names
    the checker's own native alternative alongside the wrapper's exclusion.
-6. Decide, not merely document, a compatibility policy for
-   ``.check_formatting.toml`` and the ``--json`` payload shape across
-   ``check_formatting`` version bumps: what a pre-1.0 breaking change looks
-   like, whether/how a migration would be announced, and whether backend
-   version bumps (e.g. a new pinned ``vnu`` release) are independent of the
-   wrapper's own versioning. This is a decision for Maxime to make, not a
-   fact this document can respond to with default a policy for, and it does
-   not need to ship in the same pass as the rest of this epic.
+6. Partially shipped: every external backend now has an executable version
+   probe and an explicit CLI compatibility contract; a backend contract
+   change ships with a new ``check_formatting`` release, while consuming
+   projects still pin one exact backend version within that contract.  The
+   separate wrapper-API decision remains open: compatibility and migration
+   policy for ``.check_formatting.toml`` and the ``--json`` payload across
+   pre-1.0 ``check_formatting`` version bumps.
 7. Shipped: a copyable day-to-day workflow template an adopting project
    can drop into its own ``CONTRIBUTING.md``, including the Ruff
    format/lint interaction found while verifying item 1 (a single
@@ -290,9 +289,9 @@ Add a "Getting started" section (README.md, expanded in
 
 Pure documentation — no production code or config-schema change for items
 1-5 and 7-9, so no TDD cycle applied to those, matching item 1 of the vnu
-epic. Item 6 is a policy decision, not a documentation task, and remains
-the one open item — it should not be scheduled as if it were equally
-cheap, and has no urgency forcing it into any particular pass.
+epic. Item 6 subsequently gained a TDD implementation for backend CLI
+compatibility; only its independent wrapper configuration/JSON compatibility
+decision remains open.
 
 ************************
 Recommended sequencing
@@ -305,10 +304,9 @@ additional recipes and reference tables after both — adopted: items 2, 3,
 and 5 shipped first, the architecture guide shipped as
 :doc:`../architecture` next, and items 1, 4, 7, 8, and 9 shipped together
 in this final pass, in that order (1 and 9 as the worked examples the rest
-build on, 4/7/8 following naturally once those examples existed). Item 6
-(the compatibility policy decision) remains open, with no dependency on
-anything shipped and no urgency forcing it into this or any pass —
-schedule it whenever Maxime is ready to commit to an answer.
+build on, 4/7/8 following naturally once those examples existed). Item 6's
+backend contract shipped later; its wrapper configuration/JSON policy remains
+independent and may be scheduled separately.
 
 **************
 Out of scope
