@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -162,6 +163,30 @@ def test_real_vnu_skip_info_messages_hint_on_hidden_failure(tmp_path: Path) -> N
     assert result.returncode == 1
     assert "vnu exited with status 1" in result.stdout
     assert "--skip-info-messages" in result.stdout
+
+
+def test_real_vnu_skip_info_messages_hint_appears_in_json_mode(tmp_path: Path) -> None:
+    """The same hidden-failure diagnostic, through ``--json``: it must land
+    in the per-checker ``output`` field rather than being lost to whichever
+    mode suppresses ordinary chrome.
+    """
+    _write_project(
+        tmp_path,
+        {
+            "assets/index.html": (
+                '<!doctype html><html lang="en"><head><meta charset="utf-8" />'
+                "<title>Void element</title></head><body><main><h1>Void element</h1>"
+                "</main></body></html>\n"
+            )
+        },
+        args=["--skip-info-messages"],
+    )
+
+    result = _run_vnu_check(tmp_path, "--json")
+
+    payload = json.loads(result.stdout)
+    assert payload["overall_ok"] is False
+    assert "vnu exited with status 1" in payload["results"]["vnu"]["output"]
 
 
 def test_real_vnu_narrow_filter_still_fails_on_unrelated_error(tmp_path: Path) -> None:
