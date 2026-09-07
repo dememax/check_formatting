@@ -1254,7 +1254,21 @@ def _check_vnu(
 
     mandatory_args = ["--Werror", "--also-check-css", "--also-check-svg"]
     log(f"▶ vnu {' '.join(mandatory_args)}  {_file_count_label(len(files), excluded)}")
-    return cli._run([vnu_bin, *mandatory_args, *args, *(str(file) for file in files)], cwd=root) == 0
+    exit_code = cli._run([vnu_bin, *mandatory_args, *args, *(str(file) for file in files)], cwd=root)
+    ok = exit_code == 0
+    if not ok and "--skip-info-messages" in args:
+        # See docs/roadmap/vnu-message-suppression-ergonomics.rst, Finding 1:
+        # --skip-info-messages only changes what vnu prints, never whether
+        # --Werror still exits non-zero, so a filtered-out message can fail
+        # the check with nothing at all to explain why. Unconditional print
+        # (not log()) so this survives --quiet, matching the missing-backend
+        # ERROR above.
+        print(
+            f"  vnu exited with status {exit_code}. --skip-info-messages can hide findings "
+            "that still cause failure under --Werror. Remove it to inspect the findings; "
+            "use a targeted message filter for accepted exceptions."
+        )
+    return ok
 
 
 def _check_rst(
