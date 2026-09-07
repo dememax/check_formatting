@@ -165,19 +165,14 @@ gotcha, one entry per backend rather than per checker — ``prettier`` backs
 four checkers (``web``, ``json``, ``ini``, ``yaml``) and is described once.
 None of these are ``check_formatting``'s own code or Python dependencies.
 The VNU instructions below pin the exact independently installed version used
-to validate this adapter — unlike every other backend on this page, ``vnu``
-has no standard system or language-ecosystem package to install from at
-all: it isn't in Ubuntu's or Gentoo's package repositories (checked
-directly on both), and its only real distribution channel, the
-``vnu-jar`` npm package, uses npm merely as a convenient transport for a
-Java JAR rather than as ``vnu``'s native ecosystem the way npm genuinely
-is prettier's. Every other backend here already has an ecosystem-standard
-way to pin an exact version when one is wanted — ``apt install
-foo=1.2.3``, ``pip install foo==1.2.3``, or, for prettier specifically, a
-project's own committed ``package-lock.json`` — so this project's own
-docs don't need to invent one. For ``vnu``, nothing like that exists
-upstream, so the reproducible install-and-verify procedure below is
-supplying what the ecosystem doesn't.
+to validate this adapter. ``vnu`` is absent from the Ubuntu and Gentoo package
+repositories checked for this project, so the system-wide ``~/opt`` recipe
+fills that distribution gap. Upstream also publishes the official ``vnu-jar``
+npm package, whose ``vnu`` executable can be pinned in a consuming project's
+``package-lock.json`` and exposed through ``node_modules/.bin``. The system and
+project-local routes serve different deployment models; ``check_formatting``
+does not search either specially and runs whichever executable its invocation
+environment resolves.
 
 ``clang-format`` (``cpp``)
    Part of the LLVM toolchain.  Install via the system package manager
@@ -1007,7 +1002,12 @@ your own ``checks`` list actually needs):
          - uses: actions/setup-python@v5
            with:
              python-version: "3.14"
-         - run: python3.14 -m pip install check-formatting
+         - uses: actions/checkout@v4
+           with:
+             repository: dememax/check_formatting
+             ref: <pinned-commit-or-release-tag>
+             path: .tools/check_formatting
+         - run: python3.14 -m pip install .tools/check_formatting
          # npm install, apt-get install <backend>, etc. — only for the
          # backends this project's own checks list enables
          - run: python3.14 ci_check.py  # the script above; it invokes check_formatting --all --json itself

@@ -23,22 +23,19 @@ Backend installation policy: system vs. project-specific, per distro
 Summary
 *********
 
-``check_formatting`` has exactly one backend-resolution mechanism,
-uniformly, for all fourteen checkers: a bare ``PATH`` lookup
-(``shutil.which``), never a project-local ``.venv/`` search of its own —
-see :doc:`../architecture`'s checker-contract section and AGENTS.md's
-existing "Virtualenv / tool-resolution policy". "System install" versus
-"project-specific pin" was never a switch this tool offers; it is entirely
-a property of what happens to be on ``PATH`` at invocation time. Do
-nothing, and you get whatever is installed system-wide. Want a
-project-specific version instead? Install it somewhere project-scoped and
-make sure that location is earlier on ``PATH`` when ``check_formatting``
-runs (activate a venv, etc.) — the tool never discovers or prefers either
-on its own initiative.
+``check_formatting`` delegates executable resolution to its invocation
+environment. Most backends are bare commands resolved from ``PATH`` (some
+checkers preflight that lookup with ``shutil.which`` and some let the shared
+subprocess helpers report a missing command); Prettier is the deliberate
+exception, invoked through ``npx --no-install prettier`` so a consuming
+project's installation can win. ``check_formatting`` never searches a
+project-local ``.venv`` itself. A caller that intentionally wants a
+project-scoped tool must expose it through ``PATH`` before invoking the
+utility.
 
 That single mechanism turns out to cover every backend already — this
 session's own research (below) found a legitimate, ecosystem-native,
-per-project pinning route for all but one of them. What's missing is not
+per-project pinning route for all of them. What's missing is not
 a *feature*; it's that this project's own docs never state the mechanism
 once, generally, and then apply it consistently per backend. Instead,
 today's docs read as if ``vnu`` alone got special, careful treatment
@@ -60,10 +57,10 @@ seed of this epic rather than something newly found for it:
 
 * ``vnu`` has no system package on either host checked — confirmed
   directly, not assumed: no ``apt`` candidate on Ubuntu, nothing in
-  Gentoo's main tree either. Every *other* backend already has an
-  ecosystem-standard way to pin an exact version if wanted. Nothing in
-  the shipped docs said this was *why* ``vnu`` alone gets a from-scratch
-  install recipe — a reader had to ask to find out.
+  Gentoo's main tree either. It does have an official project-specific
+  route: ``vnu-jar`` exposes a ``vnu`` executable from a pinned npm
+  dependency. The system-wide recipe remains useful because it supplies
+  the missing distro installation, not because no ecosystem package exists.
 * The shipped ``prettier`` paragraph described a wrong fallback
   mechanism ("bare ``npx prettier``... one-off network download") when
   the actual invocation (every call site, grepped directly) always
@@ -156,29 +153,22 @@ route, previously undocumented as such:
    * - ``vnu``
      - not packaged at all
      - not packaged at all
-     - Not actually available — see below
-     - The one real exception; see "vnu has no project-specific route"
-       below.
+     - npm ``vnu-jar`` — pin in ``package.json``/``package-lock.json`` and
+       expose ``node_modules/.bin`` through the invocation environment
+     - The ``~/opt`` recipe provides a system-wide alternative where distro
+       packages are absent.
 
-==========================================================================================
-``vnu`` has no project-specific route, and that's architectural, not a documentation gap
-==========================================================================================
+===========================================================
+``vnu`` has both project-local and system-wide pin routes
+===========================================================
 
-Unlike every other backend above, ``check_formatting`` resolves ``vnu``
-via a bare ``shutil.which("vnu")`` call — never through a resolver like
-``npx`` that would naturally prefer a project-local install if one
-existed. Even though ``vnu-jar`` exists on npm, a project installing it
-locally (``npm install vnu-jar`` in its own ``package.json``) would never
-be picked up by this adapter, because the adapter never looks in
-``node_modules/`` at all for it. The *closest* equivalent — a
-project-scoped install directory added to ``PATH`` ahead of the system
-one, using this project's own pinned-install-and-verify recipe pointed at
-a project-local directory instead of ``~/opt`` — is possible in principle
-(the same PATH-ordering mechanism as everything else), but there is no
-packaged ecosystem making it convenient the way ``pip``/``npm`` do for
-every other backend in this table. Worth stating plainly rather than
-leaving a reader to discover it by testing, the way this session had to
-discover prettier's fallback behavior.
+``check_formatting`` resolves ``vnu`` with ``shutil.which("vnu")``. A local
+``npm install --save-dev vnu-jar@<version>`` creates
+``node_modules/.bin/vnu``; an npm script adds that directory to ``PATH``
+automatically, and another launcher may add it explicitly. The adapter then
+finds that pinned executable without needing backend-specific discovery.
+The documented ``~/opt`` installation instead supplies a centrally managed
+executable for projects that intentionally share one tested backend version.
 
 ***************
 Proposed work
@@ -211,10 +201,9 @@ paragraphs only partially have:
    sentence of "how to make it take priority" (activate the venv before
    invoking ``check_formatting``) rather than leaving that connection
    implicit.
-4. Where no project-specific route exists at all (``vnu``, and
-   ``check_rst`` for a different reason), say so explicitly rather than
-   silently omitting the row — a missing entry currently reads as an
-   oversight rather than a fact.
+4. Where no packaged project-specific route exists (currently ``check_rst``),
+   say so explicitly rather than silently omitting the row — a missing entry
+   otherwise reads as an oversight rather than a fact.
 
 Add a compact summary table (the shape of this epic's own evidence table
 above, without the "Notes" column) near the top of the Backends section

@@ -81,7 +81,9 @@ to monkeypatch it.
 Registering a new checker
 ===========================
 
-Exactly three files are edited, each a different kind of change:
+Exactly three production files make up the registration surface, each a
+different kind of change (tests and user/contributor documentation are
+additional required work):
 
 #. ``_config.py`` — add the section/key ``Final`` tuple(s) to
    ``_CONFIG_FIELDS`` (this alone gives the new section's unknown-key and
@@ -160,9 +162,10 @@ don't treat either example below as the one mandatory mechanism:
 Missing backend fails cleanly, never with a traceback
 =======================================================
 
-Ten of the fourteen checkers pre-check with a bare ``shutil.which`` call
+Seven of the fourteen checkers pre-check with a bare ``shutil.which`` call
 and print a specific ``"  ERROR: <tool> not found — ..."`` line before
-doing anything else. The rest (``cpp``, ``web``, ``meson``) rely on
+dispatch. The other seven (``cpp``, ``meson``, ``python``, and the four
+Prettier-backed ``web``/``json``/``ini``/``yaml`` checkers) rely on
 ``_run``/``_fmt_stdout``'s own ``FileNotFoundError`` handling instead —
 both already catch it and print ``"ERROR: command not found: ..."`` —
 letting the subprocess call itself fail cleanly rather than pre-checking.
