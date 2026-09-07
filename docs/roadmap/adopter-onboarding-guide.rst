@@ -7,11 +7,15 @@ Onboarding guide for a new adopting project
 #############################################
 
 :Status: Proposed.
-:Source: A cold-reader review of this project's own documentation
+:Sources: A cold-reader review of this project's own documentation
    (README.md, :doc:`../check_formatting`) from the perspective of a new
    project author adopting ``check_formatting`` for the first time, done in
-   this session (2026-09-07) alongside the sibling
-   :doc:`new-checker-architecture-guide` epic.
+   the session that produced this epic (2026-09-07) alongside the sibling
+   :doc:`new-checker-architecture-guide` epic; a second review by Codex
+   against this epic's first version (2026-09-07), which reproduced several
+   CI/first-run edge cases directly against the installed tool and found the
+   proposed CI/exclusion examples would have shipped materially incomplete
+   or misleading. This revision folds those corrections in directly.
 :Versions involved: ``check_formatting`` 0.3.0
 
 *********
@@ -20,40 +24,50 @@ Summary
 
 ``check_formatting``'s per-checker *reference* documentation (the Checkers
 table, the per-backend paragraphs, the file-selection and git-scoped-fix
-tables) is accurate and precise — nothing found while reading it as a cold
-adopter turned out to be wrong. But it answers "what does checker X do"
+tables) is accurate and precise. But it answers "what does checker X do"
 without ever answering "how do I, starting from a blank repository, reach a
-good `.check_formatting.toml`, a CI-integrated setup, and a workflow my own
-contributors will actually follow." That is a synthesis gap sitting one
-level above the reference, the same shape as the sibling
-:doc:`new-checker-architecture-guide` epic's finding for implementors, just
-at the adopter's altitude instead.
+good ``.check_formatting.toml``, a CI-integrated setup that actually
+catches something, and a workflow my own contributors will follow." That
+synthesis gap is real — but, per this revision's second review, the
+concrete examples this epic proposes to fill it need real behavioral
+verification before they ship, not just prose: an under-specified CI
+example would teach adopters to build a CI check that silently never runs.
 
 ****************************
 Evidence from this session
 ****************************
 
-The :doc:`vnu-message-suppression-ergonomics` epic is itself a case study of
-this exact gap for one single checker: a real adopter (``sagui``) had to
+The :doc:`vnu-message-suppression-ergonomics` epic is itself a case study
+of this gap for one single checker: a real adopter (``sagui``) had to
 discover, under real usage pressure, the correct order of operations
-(baseline with ``--all`` and no filters, review every finding, fix genuine
-issues, accept one specific finding by its complete message text, then
-re-verify ``--all``) because nothing generalized that discipline ahead of
-time. That recipe is now written down — but only for ``vnu``. Nothing tells
-a first-time adopter to apply the same discipline to *any* checker before
-narrowing its scope or accepting a finding.
+(baseline broad, review every finding, fix genuine issues, accept one
+specific finding, re-verify broad) because nothing generalized that
+discipline ahead of time. That recipe is now written down — but only for
+``vnu``.
 
-Reading ``_checkers.py`` directly (the same pass that produced the sibling
-epic) surfaced a second, previously undiscussed instance of the same
-pattern: ``_check_mypy`` calls
-``_invalidate_mypy_cache_if_version_changed``, which silently wipes a
-project's ``.mypy_cache/`` whenever the *resolved mypy's own version*
-changes — a real, deliberate safety behavior with zero mention in
-README.md or :doc:`../check_formatting`. A project caching ``.mypy_cache/``
-in CI (an entirely standard speedup) would see occasional, unexplained
-full-cache rebuilds with no documented reason — the identical shape as
-Finding 1 of the vnu epic (a real, intentional behavior with no surfaced
-explanation), just for a different backend.
+This revision's own verification surfaced a second, more urgent instance of
+the same shape, in the exact area this epic proposes to fix: reproduced
+directly, on a clean git checkout with a syntax-broken Python file already
+committed —
+
+.. list-table::
+   :header-rows: 1
+   :widths: 50 50
+
+   * - Invocation
+     - Result
+   * - ``check_formatting --json``
+     - Exit 0; ``"checks": []``, ``overall_ok: true`` — the syntax error is
+       never even selected
+   * - ``check_formatting --all --json``
+     - Exit 1; the real syntax error reported
+
+A bare invocation selects files changed since ``HEAD`` plus untracked
+files — on a freshly cloned or freshly committed checkout, that set is
+empty by definition, so the command trivially reports success. A CI
+example that doesn't lead with this fact would teach adopters to wire up a
+check that never actually runs on a clean build. See "No CI-integration
+story" below for the full corrected requirement.
 
 **********************
 Cold-reader findings
@@ -65,27 +79,46 @@ No starter configs by project shape
 
 README.md's only example config is one abstract cpp+python+mypy snippet.
 Nothing shows a complete, realistic ``.check_formatting.toml`` for the
-project shapes the documentation itself names as the tool's actual use
-cases — "a pure Python package," "a Meson/prettier/ruff project," "a
-CMake/Zephyr project." An adopter must assemble one by hand from the
-Checkers table, one row at a time, with no worked example to check against.
+project shapes the documentation itself names as target use cases, and
+nothing demonstrates that a shown config actually catches anything — a
+valid config that checks zero real violations is not evidence it works.
 
-=========================
-No CI-integration story
-=========================
+============================================================================
+No CI-integration story, and the obvious first example is wrong by default
+============================================================================
 
 No pre-commit hook example, no CI snippet, and no example consuming
-``--json``'s payload (``summary.failed``, per-checker ``results``) despite
-that flag being explicitly built for machine consumption. This project's
-own repository has no CI workflow either, so the gap has never been
-dogfooded even once.
+``--json``'s payload, despite that flag being explicitly built for machine
+consumption. Worse than merely absent: the naive version of this example
+(run bare ``check_formatting --json`` in CI) is confirmed **incorrect** —
+see "Evidence from this session" above. A second gap in the same area,
+also verified this session: a configuration error (missing or malformed
+``.check_formatting.toml``) prints plain text and exits 1 even under
+``--json`` — it never enters the JSON envelope at all::
 
-==============================================================
-The mypy-cache version-invalidation behavior is undocumented
-==============================================================
+   $ check_formatting --json   # malformed .check_formatting.toml
+   check_formatting: invalid .check_formatting.toml: Invalid value (at end of document)
+   $ echo $?
+   1
 
-See "Evidence from this session" above. Real, deliberate, CI-relevant, and
-currently discoverable only by reading ``_checkers.py``.
+A CI script that unconditionally pipes stdout into ``json.loads()`` would
+crash with a ``JSONDecodeError`` on this path rather than surfacing the
+real problem. This project's own repository has no CI workflow either, so
+none of this has ever been dogfooded.
+
+========================================================================================
+The mypy-cache invalidation behavior is undocumented, and more specific than described
+========================================================================================
+
+``_check_mypy`` calls ``_invalidate_mypy_cache_if_version_changed``, which
+wipes ``root / ".mypy_cache"`` — the project-root cache directory this
+wrapper itself manages, independent of any ``cache_dir`` a project's own
+``pyproject.toml``/``mypy.ini`` configures for mypy directly — whenever the
+resolved mypy's version differs from a marker recorded there, **or when no
+marker is present at all** (first run, or a cache that predates this
+check: "treated as a mismatch: wipe once, the safe default", per the
+function's own docstring). Real, deliberate, CI-relevant, and currently
+discoverable only by reading ``_checkers.py``.
 
 ==================================================
 No "which checkers should I enable" decision aid
@@ -96,27 +129,42 @@ types onto the Checkers table by hand. Nothing goes the other direction:
 "you have ``.py`` files → consider ``python``/``mypy``; you have
 ``CMakeLists.txt`` → consider ``cmake``," etc.
 
-==================================================================
-``.formatting-ignore``'s exceptions are scattered, not tabulated
-==================================================================
+===============================================================================================
+``.formatting-ignore``'s exceptions need a selection-scope dimension, not just checker × mode
+===============================================================================================
 
-Individually correct, collectively hard to use: RST ignores it entirely;
-Meson and Web only honor it outside check/verbose mode; Python never
-honors it without explicit files (use ``pyproject.toml``'s own Ruff
-exclude instead). Each fact lives in its own sentence, in prose, with no
-single "does `.formatting-ignore` apply to checker X in mode Y" table to
-check against.
+The current text ("Meson and Web ... `.formatting-ignore` applies to them
+only in diff, fix, and explicit-file modes") is incomplete, not wrong, and
+this revision corrects the axis rather than just the wording. Reading
+``_check_web`` directly: its per-file, ignore-pattern-respecting selection
+path triggers whenever ``fix or diff or explicit_files is not None`` — and
+the default, git-auto-detected scope (bare ``check_formatting``, no
+``--all``) *already populates* ``explicit_files`` with the changed-file
+list before calling any checker. So ``.formatting-ignore`` **does** apply
+in ordinary check/verbose mode too, as long as the invocation is
+git-auto-detected or truly explicit (``-- FILE``); it is specifically
+``--all`` (which passes ``explicit_files=None`` to force a full glob scan)
+that hits the single-batched-command path where per-file exclusion is
+impossible. The real table needed is **checker × mode × selection
+mechanism** (auto-detected / explicit files / ``--all``), not checker ×
+mode alone, with each checker's native ignore mechanism (``.prettierignore``,
+``pyproject.toml``'s Ruff exclude, ``.clang-tidy-ignore``) named alongside
+the wrapper's own exclusions rather than only as an aside.
 
-===============================================================
-No stated compatibility policy for ``.check_formatting.toml``
-===============================================================
+======================================================================
+Compatibility policy is a decision to make, not a fact to write down
+======================================================================
 
-Nothing states whether the config schema is considered stable across
-``check_formatting`` version bumps, or what happens to a project's config
-if a key is ever renamed or removed. This matters concretely: this very
-host just carried a project through a ``0.2.0`` → ``0.3.0`` upgrade in this
-session, and any consuming project pinning a ``check_formatting`` version
-has the same open question with no documented answer.
+Nothing states whether the config schema, or the ``--json`` payload shape,
+is considered stable across ``check_formatting`` version bumps, what a
+pre-1.0 breaking change looks like, or whether a backend-version bump
+(e.g. a new ``vnu`` release) is independent of the wrapper's own
+versioning. Unlike the mypy-cache finding above (a fact about existing
+code, just undocumented), this is not something to merely document — it
+requires Maxime to actually adopt a policy first. This host's own
+``check_formatting`` 0.2.0 → 0.3.0 upgrade in this session is a concrete
+instance of the open question: nothing currently promises what would or
+would not have broken a pinning consumer.
 
 ================================================
 No adopter-facing day-to-day workflow template
@@ -133,21 +181,29 @@ that discipline being entirely generic, not specific to developing
 No generalized "verify your first setup" guidance
 ===================================================
 
-The vnu epic's adoption recipe ("baseline broad with ``--all`` before any
-filter, review real findings, don't suppress anything unread") is exactly
-the right first-time-setup discipline for *every* checker, not only
-``vnu`` — but it was only ever written down once, ad hoc, in that one
-epic, rather than as general first-time-setup guidance a new adopter
-would find before configuring their first checker.
+The vnu epic's adoption recipe ("baseline broad, review real findings,
+don't suppress anything unread") is exactly the right first-time-setup
+discipline for *every* checker, not only ``vnu`` — but it was only ever
+written down once, ad hoc, in that one epic. For a repository with
+existing, unmaintained, or vendored/generated content, "baseline broad"
+needs an explicit caveat: start from the maintained files a project's
+authors actually own, establish a clean baseline there, and expand
+deliberately — "broad" should not silently mean "every vendored or
+generated file, indiscriminately," which the vnu recipe's own single-project
+context never had to address.
 
-========================================
-No consolidated backend-install matrix
-========================================
+================================================================================
+An exhaustive backend-install matrix is more maintenance than an adopter needs
+================================================================================
 
 Each backend's install command (``apt``, ``brew``, ``pip``, ``npm``) is
-correct but scattered across roughly a dozen separate paragraphs in the
-"Backends" section. Provisioning a fresh dev container or CI image means
-reading all of them individually rather than scanning one table.
+correct but scattered across roughly a dozen separate paragraphs. This
+revision no longer proposes a full apt×brew×pip×npm matrix for every
+backend in the main guide — keeping four install variants current per
+backend is a maintenance burden disproportionate to the value, and the
+existing per-backend paragraphs already carry the detail. A short table
+naming one supported route per backend, linking to the fuller paragraph,
+is enough for a first-time entry point.
 
 ***************
 Proposed work
@@ -157,51 +213,92 @@ Add a "Getting started" section (README.md, expanded in
 :doc:`../check_formatting`) covering:
 
 1. Two or three complete starter configs for the project shapes the
-   documentation already names as target use cases, each a full, valid
-   ``.check_formatting.toml`` ready to adapt rather than assemble from
-   scratch.
-2. A CI-integration example: a pre-commit hook snippet and a CI job
-   snippet, including one showing ``--json`` consumed by a script (parsing
-   ``summary.failed``/``overall_ok``) rather than only piping human output.
-3. Document the mypy-cache version-invalidation behavior next to
-   ``mypy``'s existing paragraph, with a one-line note for CI cache
-   configurations.
+   documentation already names as target use cases. Each must be
+   demonstrated, not just valid: include the native/non-TOML prerequisites
+   it actually depends on (running from the project root; Python 3.14 on
+   ``PATH``; ``npm install`` for Prettier-backed checkers; a built/rendered
+   output directory for a checker like ``vnu`` that validates generated
+   HTML), and show it catching one deliberately introduced violation, not
+   only passing cleanly. For a repository with pre-existing, unmaintained
+   content, show the gradual-adoption path: scope the initial config to
+   files the project's own authors maintain, establish a clean baseline,
+   then broaden deliberately — not "point globs at everything, including
+   vendored or generated trees, on day one."
+2. A CI-integration example built around the verified findings above, not
+   the naive version: use ``--all`` (or explicit files) for any CI job
+   meant to gate a clean checkout — a bare invocation measures
+   working-tree changes, not the commit under test, and silently passes
+   with nothing selected otherwise. Show a pre-commit hook alongside it,
+   with two decisions made explicitly rather than left implicit: whether
+   the hook passes it the staged filenames (which changes checkers' native
+   git-scoped-fix behavior — explicit files bypass the auto-detected-scope
+   optimizations some checkers use) or lets ``check_formatting`` do its own
+   git-aware selection, and a note that pre-commit itself temporarily
+   stashes unstaged changes during a hook run (see `pre-commit's own docs
+   <https://pre-commit.com/#pre-commit-during-commits>`_) — a partially
+   staged file is worth testing explicitly, not assumed to behave like a
+   fully staged one. Show ``--json`` consumed by a script, including
+   handling the confirmed gap: a configuration error prints plain text and
+   exits 1 without ever producing JSON, so a consuming script must check
+   the exit status (or catch a JSON decode failure) before assuming
+   parseable output, not call ``json.loads()`` unconditionally.
+3. Document the mypy-cache invalidation behavior precisely next to
+   ``mypy``'s existing paragraph: it wipes the project-root
+   ``.mypy_cache`` this wrapper itself manages (not a project's own
+   configured mypy cache directory, if that differs), on either a version
+   change or no marker being present at all (including the very first run
+   after adopting this checker) — relevant to any CI cache configuration
+   keying on that directory.
 4. A "which checkers should I enable" checklist, keyed by file type or
    build system present in the adopting repository, inverse of the
    existing Checkers table.
-5. Consolidate ``.formatting-ignore``'s per-checker, per-mode exceptions
-   into one table (checker × mode → does ``.formatting-ignore`` apply, and
-   if not, what to use instead), replacing the current scattered prose
-   without removing the detail.
-6. State a compatibility policy for ``.check_formatting.toml`` across
-   ``check_formatting`` version bumps — at minimum, whether a key rename or
-   removal would be a breaking change requiring a version bump of its own,
-   and where such a change would be announced.
+5. Rebuild the ``.formatting-ignore`` exceptions as one **checker × mode ×
+   selection-mechanism** table (auto-detected / explicit files / ``--all``),
+   correcting the current checker × mode framing, and name each checker's
+   native ignore mechanism alongside the wrapper's own exclusion options
+   rather than only as an aside.
+6. Decide, not merely document, a compatibility policy for
+   ``.check_formatting.toml`` and the ``--json`` payload shape across
+   ``check_formatting`` version bumps: what a pre-1.0 breaking change looks
+   like, whether/how a migration would be announced, and whether backend
+   version bumps (e.g. a new pinned ``vnu`` release) are independent of the
+   wrapper's own versioning. This is a decision for Maxime to make, not a
+   fact this document can respond to with default a policy for, and it does
+   not need to ship in the same pass as the rest of this epic.
 7. A copyable day-to-day workflow template an adopting project can drop
    into its own ``CONTRIBUTING.md``, generalizing AGENTS.md's own
    before-every-commit discipline into project-agnostic language.
-8. Generalize the vnu epic's "baseline broad, review, then narrow"
-   recipe into first-time-setup guidance that applies when enabling *any*
-   checker, with the vnu recipe kept as its worked example rather than an
-   isolated special case.
-9. A consolidated backend-install matrix: one table, tool → apt package
-   → brew package → pip package → npm dependency, for every backend, in one
-   scannable place instead of a dozen paragraphs.
+8. Generalize the vnu epic's "baseline broad, review, then narrow" recipe
+   into first-time-setup guidance that applies when enabling *any*
+   checker, including the gradual-adoption caveat for legacy repositories
+   from the finding above, with the vnu recipe kept as its worked example.
+9. A short backend-entry-point table — one supported install route per
+   backend, linking to the existing fuller paragraph — rather than a full
+   apt/brew/pip/npm matrix maintained for every backend.
 
-Pure documentation — no production code or config-schema change, so no TDD
-cycle applies, matching item 1 of the vnu epic.
+Pure documentation — no production code or config-schema change for items
+1-5 and 7-9, so no TDD cycle applies to those, matching item 1 of the vnu
+epic. Item 6 is a policy decision, not a documentation task, and should not
+be scheduled as if it were equally cheap.
 
 ************************
 Recommended sequencing
 ************************
 
-Independent of both the vnu epic's remaining items and the sibling
-:doc:`new-checker-architecture-guide` epic — different audience, no shared
-prerequisite. Items 3 and 6 are cheap, standalone facts worth shipping
-first; items 1, 2, 5, and 9 are the bulk of the "Getting started" section
-and are more naturally written together; item 8 depends on item 1 existing
-(the generalized recipe needs a real starter config to attach to as an
-example).
+Codex's review of both roadmap epics together recommended prioritizing
+this epic's tested onboarding baseline and CI example ahead of the sibling
+:doc:`new-checker-architecture-guide` epic's corrected walkthrough, with
+additional recipes and reference tables after both — adopted here. Within
+this epic: item 2 (the CI/pre-commit example) is now the highest-value,
+highest-risk-if-wrong piece, given this revision's own findings about what
+a naive version would have shipped — do it first, and verify each claimed
+behavior the way this revision did rather than trusting prose alone. Items
+3 and 5 are cheap, standalone, already-verified facts, worth shipping
+alongside it. Items 1 and 9 follow naturally from item 2's own worked
+examples. Item 8 depends on item 1 existing. Item 6 (the compatibility
+policy decision) has no dependency on the rest and no urgency forcing it
+into this pass — schedule it whenever Maxime is ready to commit to an
+answer, not as a checkbox alongside the documentation items.
 
 **************
 Out of scope
