@@ -16,29 +16,42 @@ No per-repo fact is hardcoded in the tool itself: every checker's active
 status, file globs/directories/paths, and any tool-specific settings are
 declared once, per project, in a committed `.check_formatting.toml`.
 
-The detailed reference is in [docs/check_formatting.rst](docs/check_formatting.rst).
+Documentation starts with the role-oriented [guide](docs/guide.rst):
+[getting started](docs/getting_started.rst), [backends](docs/backends.rst),
+[command reference](docs/reference.rst), and
+[integration/automation](docs/integration.rst) are separate reading paths.
 Implementing a new checker? See
 [docs/architecture.rst](docs/architecture.rst) for the internal
 contract every existing checker already follows.
 
 ## Installation
 
-Requires Python 3.14 or newer. The shortest path from a clone to a working
-command is:
+Requires Python 3.14 or newer. For a standalone utility under `~/opt`, keep
+its Python package isolated without activating that environment:
 
 ```bash
-python3.14 -m pip install /path/to/check_formatting
+python3.14 -m venv "${HOME}/opt/check_formatting"
+"${HOME}/opt/check_formatting/bin/python" -m pip install /path/to/check_formatting
+export PATH="${HOME}/opt/check_formatting/bin:${PATH}"
 check_formatting --help
 check_formatting --version
 ```
 
-`pip install` builds a wheel internally and installs both the Python package
-and its console entry point. To build the wheel explicitly instead:
+Persist that `PATH` entry in the shell's startup configuration. This
+environment isolates the utility's own Python package; it does not need to be
+activated and does not change backend resolution—backend executables still
+come from the invoking process's `PATH`.
+
+Installing into another already-selected Python environment works too:
+`python3.14 -m pip install /path/to/check_formatting`. `pip install` builds a
+wheel internally and installs both the Python package and its console entry
+point. To build the wheel explicitly instead:
 
 ```bash
 cd /path/to/check_formatting
 python3.14 -m pip wheel --wheel-dir dist .
-python3.14 -m pip install dist/check_formatting-0.3.0-py3-none-any.whl
+"${HOME}/opt/check_formatting/bin/python" -m pip install \
+  dist/check_formatting-0.3.0-py3-none-any.whl
 ```
 
 The generated wheel is a pure-Python, platform-independent package. Its exact
@@ -59,10 +72,11 @@ after changing packaging metadata or console entry points in `pyproject.toml`.
 
 The `pyproject.toml` console entry point installs `check_formatting` in the
 selected Python environment's scripts directory, which must be on `PATH`.
-The equivalent module invocation is:
+Use that same environment's interpreter for the equivalent module invocation;
+for the standalone installation above:
 
 ```bash
-python3.14 -m check_formatting
+"${HOME}/opt/check_formatting/bin/python" -m check_formatting
 ```
 
 Run either form from the root of a consuming project containing its committed
@@ -85,20 +99,20 @@ versions. A consuming project should pin an exact backend version inside the
 supported interval; these compatibility intervals are not dependency locks.
 The current contracts range from `>=21.0.0,<24.0.0` for LLVM tools to the
 exact `vnu==26.9.5`. See the
-[backend compatibility table](docs/check_formatting.rst#backend-compatibility)
+[backend compatibility table](docs/backends.rst#backend-compatibility)
 for every backend and the diagnostic behavior.
 
-To update a normal installation after updating the checkout:
+To update the standalone installation after updating the checkout:
 
 ```bash
 cd /path/to/check_formatting
-python3.14 -m pip install --upgrade .
+"${HOME}/opt/check_formatting/bin/python" -m pip install --upgrade .
 ```
 
 To remove the package and its console entry point:
 
 ```bash
-python3.14 -m pip uninstall check-formatting
+"${HOME}/opt/check_formatting/bin/python" -m pip uninstall check-formatting
 ```
 
 The distribution name is `check-formatting`; the Python import package and
@@ -131,7 +145,7 @@ A section for a checker not in `checks` is simply unused, not an error —
 declare only what you need.
 
 New to the tool? See
-[docs/check_formatting.rst's "Getting started" section](docs/check_formatting.rst#getting-started)
+[the getting-started guide](docs/getting_started.rst)
 for a backend-install-at-a-glance table, a "which checkers should I
 enable" checklist keyed by what's already in your repository, two
 complete starter configs (a pure Python package; a Meson C++/web/Python
@@ -158,7 +172,7 @@ Most checkers apply this in every mode, including ordinary check mode with
 the default auto-detected scope, not only under `--fix`/`--diff` or explicit
 files — `meson`/`web` and `python`/`mypy` are exceptions with their own
 narrower rules. See
-[docs/check_formatting.rst's "Excluding files" table](docs/check_formatting.rst#excluding-files)
+[the command reference's "Excluding files" table](docs/reference.rst#excluding-files)
 for the exact rule per checker.
 
 ## Checkers
@@ -229,7 +243,7 @@ This host uses the exact upstream Nu release `26.9.5` (`a9333cb`), installed
 as `~/opt/vnu/26.9.5/vnu.jar`. The artifact SHA-256 is
 `b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756`.
 The complete reproducible installation and upgrade procedure is in
-[the backend guide](docs/check_formatting.rst#backends); it never resolves a
+[the backend guide](docs/backends.rst); it never resolves a
 mutable `latest` release.
 
 `kconfig`'s configured `build_combos` build concurrently (non-verbose mode)
@@ -278,12 +292,15 @@ Output verbosity is a separate, combinable axis:
 
 Neither `--quiet` nor `--json` changes the pass/fail return value or exit code.
 
-Every selected checker runs concurrently, so nothing prints incrementally —
-all output appears together, in `--checks` order, once every checker has
-finished. `--fail-fast` shortens the *report* to stop at the first checker
-(list order) that reports a problem; every checker still runs to completion
-regardless, so it saves no wall-clock time, only output. See
-[docs/check_formatting.rst](docs/check_formatting.rst)'s "Concurrent checker
+Every selected checker runs concurrently. Each checker's output is buffered
+until that checker reaches its turn in `--checks` order, so a fast later
+checker never prints ahead of a slower earlier one; earlier results may print
+while later checkers are still running. The final summary or JSON payload is
+produced only after dispatch finishes. `--fail-fast` shortens the *report* to
+stop at the first checker (list order) that reports a problem; every checker
+still runs to completion regardless, so it saves no wall-clock time, only
+output. See
+[the command reference](docs/reference.rst)'s "Concurrent checker
 dispatch" section for the full rationale.
 
 ## File-selection scope
@@ -366,7 +383,7 @@ must check the exit status (or catch a JSON decode failure), not call
 `json.loads()` on stdout unconditionally.
 
 See
-[docs/check_formatting.rst's "Continuous integration" section](docs/check_formatting.rst#continuous-integration)
+[the integration guide's "Continuous integration" section](docs/integration.rst#continuous-integration)
 for a complete CI job example, a verified JSON-consumption script, and a
 pre-commit hook example — including why letting `check_formatting` do its
 own git-based file selection (rather than passing it pre-commit's matched

@@ -321,17 +321,16 @@ For a generated/static site, build the site first and point ``[vnu].globs``
 at the rendered output directory, not the source templates; account for Git
 selection and any build-output exclusions already in ``.formatting-ignore``.
 
-==================================================
-Installation: tested version vs. an enforced one
-==================================================
+======================================
+Installation: exact version enforced
+======================================
 
-``check_formatting`` currently resolves whatever ``vnu`` is first on
-``PATH`` and does not itself verify its version. 26.9.5 (``a9333cb``) is the
-version this project has installed and integration-tested against — a
-statement about what's verified, not a runtime-enforced minimum. Installing
-it requires ``~/opt/bin`` (or wherever the launcher lands) to actually be on
-``PATH``; this is assumed rather than stated in the existing installation
-walkthrough and should be called out explicitly there.
+``check_formatting`` resolves whichever ``vnu`` is first on ``PATH`` and now
+accepts exactly version 26.9.5 (``a9333cb``), the artifact this project has
+installed and integration-tested.  An unrecognizable or different version
+fails before validation runs and reports the resolved binary and supported
+contract.  The normative installation walkthrough also states explicitly
+that ``~/opt/bin`` (or wherever the launcher lands) must be on ``PATH``.
 
 =================
 Troubleshooting
@@ -354,21 +353,15 @@ Troubleshooting
 Proposed work
 ***************
 
-===================================================
-1. README/guide documentation fix — ready to ship
-===================================================
+=============================================
+1. README/guide documentation fix — shipped
+=============================================
 
-Replace the current single sentence (present near-verbatim in both
-``README.md``'s ``vnu`` row/paragraph and :doc:`../check_formatting`'s
-``vnu`` backend entry — both need the same edit, they currently duplicate
-each other) with the corrected recipe and gotchas above: the worked
-void-element example with its quoted-attributes qualifier, the
+Shipped consistently in ``README.md`` and :doc:`../backends`: the
+worked void-element example with its quoted-attributes qualifier, the
 ``--skip-info-messages`` warning (Finding 1), the whole-message-match
 requirement stated correctly (Finding 2), and a pointer to this page for the
-full recipe and troubleshooting detail. Pure documentation — no production
-code or config-schema change, so no TDD cycle applies — but both copies
-need editing consistently, plus a ``check_formatting``/``check_rst`` pass
-before commit, per this project's own dogfooding rule.
+full recipe and troubleshooting detail.
 
 =============================================================
 2. Actionable diagnostic for a hidden vnu failure — shipped

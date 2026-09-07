@@ -292,7 +292,7 @@ vnu (``vnu`` checker — optional; HTML/XHTML/CSS/SVG conformance)
     This host uses the exact VNU version 26.9.5 (upstream commit a9333cb),
     installed at ``~/opt/vnu/26.9.5/vnu.jar`` with SHA-256
     ``b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756``.
-    See ``docs/check_formatting.rst`` for the version-pinned installation and
+    See ``docs/backends.rst`` for the version-pinned installation and
     upgrade procedure.  The adapter resolves the bare ``vnu`` launcher from
     ``PATH``, enables standalone CSS/SVG checks, and treats warnings as errors.
 
@@ -681,12 +681,12 @@ def check_formatting(
 
     Every selected checker runs concurrently, regardless of *fail_fast* —
     see its own entry above for what that flag actually controls now.
-    Nothing is printed incrementally while checkers are still running: all
-    output (banners, each checker's own findings, the summary table or
-    JSON payload) is produced together only once every checker has
-    finished, in *checks* list order, never completion order.  This
-    applies even to a single selected checker, deliberately: there is no
-    special case for "only one checker running".
+    Each checker's output is buffered and consumed in *checks* list order,
+    never completion order.  A later fast checker waits behind an earlier
+    slow one; an earlier result may be printed while later checkers still
+    run.  The summary table or single JSON payload is produced after the
+    thread pool finishes.  A single selected checker deliberately follows
+    the same path; there is no special case for "only one checker running".
 
     Returns
     -------

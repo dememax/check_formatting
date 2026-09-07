@@ -10,7 +10,8 @@ Onboarding guide for a new adopting project
    decision with no urgency, per its own section below — the only item
    remaining.
 :Sources: A cold-reader review of this project's own documentation
-   (README.md, :doc:`../check_formatting`) from the perspective of a new
+   (README.md, the now-split normative guides beginning at :doc:`../guide`)
+   from the perspective of a new
    project author adopting ``check_formatting`` for the first time, done in
    the session that produced this epic (2026-09-07) alongside the sibling
    :doc:`new-checker-architecture-guide` epic; a second review by Codex
@@ -153,20 +154,19 @@ mode alone, with each checker's native ignore mechanism (``.prettierignore``,
 ``pyproject.toml``'s Ruff exclude, ``.clang-tidy-ignore``) named alongside
 the wrapper's own exclusions rather than only as an aside.
 
-======================================================================
-Compatibility policy is a decision to make, not a fact to write down
-======================================================================
+=========================================================
+Wrapper compatibility policy remains a decision to make
+=========================================================
 
 Nothing states whether the config schema, or the ``--json`` payload shape,
-is considered stable across ``check_formatting`` version bumps, what a
-pre-1.0 breaking change looks like, or whether a backend-version bump
-(e.g. a new ``vnu`` release) is independent of the wrapper's own
-versioning. Unlike the mypy-cache finding above (a fact about existing
-code, just undocumented), this is not something to merely document — it
-requires Maxime to actually adopt a policy first. This host's own
-``check_formatting`` 0.2.0 → 0.3.0 upgrade in this session is a concrete
-instance of the open question: nothing currently promises what would or
-would not have broken a pinning consumer.
+is considered stable across ``check_formatting`` version bumps or what a
+pre-1.0 breaking change looks like.  Unlike the mypy-cache finding above (a
+fact about existing code, just undocumented), this requires an explicit
+project policy.  The backend side has since been decided separately: each
+external CLI has a runtime-enforced compatibility contract, and changing that
+contract accompanies a new wrapper release.  This host's own
+``check_formatting`` 0.2.0 → 0.3.0 upgrade remains a concrete instance of the
+open wrapper-schema/JSON question.
 
 ================================================
 No adopter-facing day-to-day workflow template
@@ -211,10 +211,10 @@ is enough for a first-time entry point.
 Proposed work
 ***************
 
-Add a "Getting started" section (README.md, expanded in
-:doc:`../check_formatting`) covering:
+Add a "Getting started" section (README.md, expanded in the normative
+:doc:`../getting_started` guide) covering:
 
-1. Shipped, in :doc:`../check_formatting`'s new "Getting started" section:
+1. Shipped in :doc:`../getting_started`:
    two complete starter configs, both actually run end to end while
    writing the docs (not just written to look plausible) — a pure Python
    package, and a Meson C++/web/Python project — each demonstrated
@@ -231,7 +231,7 @@ Add a "Getting started" section (README.md, expanded in
    config to files the project's own authors maintain, establish a clean
    baseline, then broaden deliberately.
 2. Shipped, as a new "Continuous integration" section
-   (:doc:`../check_formatting`, summarized in README.md): a generic CI job
+   (:doc:`../integration`, summarized in README.md): a generic CI job
    example built around the verified findings above, using ``--all``
    (never a bare invocation) to gate a clean checkout; a verified
    Python JSON-consumption script that catches the config-error-bypasses-JSON
@@ -245,7 +245,7 @@ Add a "Getting started" section (README.md, expanded in
    <https://pre-commit.com/#pre-commit-during-commits>`_) both explained
    as the reasoning, not just asserted.
 3. Shipped, next to ``mypy``'s existing paragraph in
-   :doc:`../check_formatting`: it wipes the project-root ``.mypy_cache``
+   :doc:`../backends`: it wipes the project-root ``.mypy_cache``
    this wrapper itself manages (not a project's own configured mypy cache
    directory, if that differs), on either a version change or no marker
    being present at all (including the very first run after adopting this
@@ -253,7 +253,7 @@ Add a "Getting started" section (README.md, expanded in
 4. Shipped, alongside item 1: a "which checkers should I enable" checklist,
    keyed by file type or build system present in the adopting repository,
    inverse of the existing Checkers table.
-5. Shipped, in :doc:`../check_formatting`'s "Excluding files" section,
+5. Shipped, in :doc:`../reference`'s "Excluding files" section,
    as a table grouped by verified behavior rather than a uniform checker ×
    mode × selection-mechanism grid — the actual code splits into distinct
    families, not one shared pattern: most checkers (``cpp``, ``cmake``,

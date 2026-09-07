@@ -4,7 +4,7 @@
 """Tests for check_formatting()'s dispatch loop running every selected
 checker concurrently instead of strictly sequentially.
 
-Eleven of the thirteen checkers still stream live via `_run`'s
+Twelve of the fourteen checkers still stream live via `_run`'s
 `sys.stdout.write` per line; the old `--json` capture mechanism
 (`contextlib.redirect_stdout` mutating the single process-global
 `sys.stdout`) was never thread-safe, which is why this was deferred every
@@ -17,15 +17,15 @@ checker's full output is captured this way regardless of --json, and
 `contextlib.redirect_stdout` is no longer used at all.
 
 Results and output are always consumed/printed in the original `checks`
-list order, only once every submitted checker has completed — never
-completion order, never incrementally. `--fail-fast` no longer stops any
-checker from running (dispatch is unconditionally parallel): every future
-is still submitted and the enclosing thread pool still waits for all of
-them, so a slow checker after a fast failure still finishes in the
-background. All --fail-fast now does is truncate the *report* at the
-first failure in list order — no summary table, and no output printed for
-checkers after it — matching today's "no summary table" contract, but for
-a report built from already-known results rather than an early return.
+list order, never completion order. Each buffer is printed when its turn is
+reached, so an earlier result can appear while later checkers still run; the
+thread pool still waits for all submitted work before final return.
+`--fail-fast` no longer stops any checker from running (dispatch is
+unconditionally parallel): every future is still submitted and the enclosing
+thread pool still waits for all of them, so a slow checker after a fast failure
+still finishes in the background. All --fail-fast does is truncate the
+*report* at the first failure in list order — no summary table, and no output
+printed for checkers after it.
 """
 
 from __future__ import annotations

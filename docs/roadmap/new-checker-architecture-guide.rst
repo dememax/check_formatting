@@ -9,7 +9,8 @@ Architecture guide for implementing a new checker
 :Status: Shipped (2026-09-07) as :doc:`../architecture`, linked from both
    README.md and AGENTS.md.
 :Sources: A cold-reader review of this project's own documentation
-   (README.md, :doc:`../check_formatting`, AGENTS.md) from the perspective
+   (README.md, the normative guides beginning at :doc:`../guide`, AGENTS.md)
+   from the perspective
    of a contributor about to implement a fifteenth checker, done in the
    session that produced this epic (2026-09-07) while extending the ``vnu``
    adapter for the :doc:`vnu-message-suppression-ergonomics` epic; a second
@@ -48,7 +49,7 @@ this epic's first draft asserted that appending a diagnostic to
 output. That claim was wrong on its own terms (corrected in that epic
 already), but it is also the wrong frame for this one: the *user-facing*
 behavior — checkers run concurrently, nothing is printed interleaved,
-README.md and :doc:`../check_formatting` both describe this in a dedicated
+README.md and :doc:`../reference` both describe this in a dedicated
 section — is already documented, accurately. What is missing is not "is
 concurrency documented" but "is the *contributor-facing implementation
 mechanism* documented": the thread-local output buffer, when a checker must
@@ -155,7 +156,7 @@ pre-existing missing-backend ``ERROR:`` line already uses plain ``print()``.
 The output/concurrency model
 ==============================
 
-README.md and :doc:`../check_formatting` already document the user-facing
+README.md and :doc:`../reference` already document the user-facing
 behavior — every checker runs concurrently, output prints in ``--checks``
 order rather than completion order, ``--fail-fast`` shortens the report but
 not the work. What neither states, because neither is written for a

@@ -14,7 +14,7 @@ test suite, not inferred — so a fifteenth checker can reuse established
 conventions instead of rediscovering or accidentally reinventing them.
 Everything here describes the architecture as it stands; where this guide
 introduces a new policy rather than describing an existing one, it says so
-explicitly. See :doc:`check_formatting` for the *user-facing* reference
+explicitly. See :doc:`guide` for the *user-facing* documentation entry point
 (what each checker does, how a project configures it) and
 :doc:`roadmap/new-checker-architecture-guide` for the roadmap epic this
 page fulfills, including the evidence behind each claim below.
@@ -247,7 +247,7 @@ Output and concurrency
 
 Every selected checker runs concurrently regardless of ``--fail-fast``, and
 the *user-facing* behavior is already documented precisely in
-:doc:`check_formatting`'s "Concurrent checker dispatch" section: output
+:doc:`reference`'s "Concurrent checker dispatch" section: output
 prints in ``--checks`` order, never completion order, and nothing prints
 interleaved. What that section doesn't cover, because it isn't written for
 a contributor, is the mechanism and what it implies for a checker
@@ -359,6 +359,14 @@ a mutating one's.
    via ``cli._run`` with the mandatory ``--Werror --also-check-css
    --also-check-svg`` flags plus the project's own ``args``.
 
+#. ``_backend_versions.py`` — register the external ``vnu`` command's exact
+   ``26.9.5`` contract and the parser for its real ``vnu --version`` output.
+   The exact pin is deliberate here because the adapter's diagnostic and
+   filtering behavior was integration-tested against that artifact.  For a
+   ranged policy, make the lower bound the oldest CLI behavior actually
+   covered and the upper bound the first incompatible or unverified release;
+   do not advertise a broad interval merely because its versions parse.
+
 ******************************
 The selection-helper library
 ******************************
@@ -395,7 +403,7 @@ filtering from scratch:
        resolved, before touching the backend.
    * - Git-hunk-range helpers (``_git_diff_hunk_ranges`` and friends)
      - Only needed for a checker implementing the *native* tier of the
-       git-scoped-fix contract (see :doc:`check_formatting`'s
+       git-scoped-fix contract (see :doc:`reference`'s
        "Git-scoped formatting" section for the user-facing contract this
        supports) — most new checkers won't need these directly.
 
@@ -420,6 +428,32 @@ New policy this guide introduces: a new checker should follow the
 ``_integration.py`` file — rather than the older mixed-file style, since
 the dedicated file makes it trivial to skip real-backend tests in an
 environment without that backend installed without hand-picking test IDs.
+
+*******************
+Release checklist
+*******************
+
+This is the maintainer/release-operator path; it is separate from an
+adopter's installation and a contributor's ordinary pre-commit loop.
+
+#. Start from a clean worktree whose feature and documentation commits have
+   already passed ``python3.14 -m pytest tests/ -v`` and
+   ``PYTHONPATH=src python3.14 -m check_formatting --all``.
+#. Add a RED packaging test for the intended release in
+   ``tests/test_check_formatting_packaging.py`` and commit it separately.
+#. Synchronize the public version in ``src/check_formatting/__init__.py``,
+   Sphinx's ``release`` in ``docs/conf.py``, and the explicit wheel example in
+   ``README.md``.  Roadmap ``Versions involved`` fields are historical
+   evidence and are not blanket-rewritten.
+#. Build a wheel from the release-candidate source tree with
+   ``python3.14 -m pip wheel --wheel-dir dist .``.  Install that local source
+   or wheel into the standalone target environment, then verify both
+   ``check_formatting --version`` and at least one complete consuming-project
+   ``check_formatting --all`` run.  A source-tree dogfood run alone does not
+   prove the installed copy was updated.
+#. Commit the synchronized release bump with its validation record.  Create or
+   publish a tag/package only when that release channel is explicitly in
+   scope; building and installing a local wheel is not itself publication.
 
 *********************
 Acceptance criteria

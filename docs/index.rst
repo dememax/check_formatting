@@ -18,6 +18,10 @@ single command-line interface.
    :maxdepth: 3
    :caption: Contents:
 
-   check_formatting
+   guide
+   getting_started
+   backends
+   reference
+   integration
    architecture
    roadmap/index

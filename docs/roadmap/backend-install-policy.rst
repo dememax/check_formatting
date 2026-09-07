@@ -14,7 +14,7 @@ Backend installation policy: system vs. project-specific, per distro
    unexplained asymmetry in how ``vnu`` versus every other backend is
    documented, and a materially wrong description of ``prettier``'s
    version-resolution fallback. Both were corrected already (see
-   :doc:`../check_formatting`'s "Backends" section, commit ``2ceeee5``);
+   :doc:`../backends`, commit ``2ceeee5``);
    this epic generalizes the underlying policy those two fixes only
    applied locally.
 :Versions involved: ``check_formatting`` 0.3.0
@@ -35,18 +35,21 @@ utility.
 
 Runtime compatibility is now a separate, shipped layer on top of this
 installation policy: every backend has a version probe and explicit supported
-CLI interval in :doc:`../check_formatting`'s "Backend compatibility" section.
+CLI interval in :doc:`../backends`' "Backend compatibility" section.
 The interval tells the adapter which CLI versions it understands; it does not
 choose, install, or pin a backend for a consuming project.  This epic's
 remaining proposed work concerns that installation and pinning guidance, so
 its status remains Proposed rather than being closed by the runtime feature.
 
-That single mechanism turns out to cover every backend already — this
-session's own research (below) found a legitimate, ecosystem-native,
-per-project pinning route for all of them. What's missing is not
-a *feature*; it's that this project's own docs never state the mechanism
-once, generally, and then apply it consistently per backend. Instead,
-today's docs read as if ``vnu`` alone got special, careful treatment
+That single mechanism turns out to cover every third-party backend already —
+this session's own research (below) found a legitimate, ecosystem-native,
+per-project pinning route for all of them; the first-party ``check_rst`` is
+the documented exception.  At the time this epic was written, what was
+missing was not a *feature* but a general explanation applied consistently
+per backend.  The normative guide now states the general runtime compatibility
+rule, while this epic's proposed per-backend installation matrix remains
+unfinished.  The then-current docs read as if ``vnu`` alone got special,
+careful treatment
 (a full pinned install-and-verify recipe) while everything else is a bare
 "install via the system package manager" — an asymmetry a careful reader
 (as this session's own conversation partner was) reasonably reads as an

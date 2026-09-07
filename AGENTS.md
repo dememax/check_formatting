@@ -154,7 +154,9 @@ This tool is a setuptools package using the `src/` layout. Install it with
 `python3.14 -m pip install .` (or `--editable .` while developing); the
 `pyproject.toml` entry point provides the `check_formatting` command. See
 [README.md](README.md)'s Installation section. Keep `main` always in a state
-appropriate for installation by consumers.
+appropriate for installation by consumers. Before issuing a version, follow
+the maintainer/release-operator checklist in
+[docs/architecture.rst](docs/architecture.rst)'s “Release checklist” section.
 
 ## Python version
 
