@@ -19,3 +19,4 @@ single command-line interface.
    :caption: Contents:
 
    check_formatting
+   roadmap/index
