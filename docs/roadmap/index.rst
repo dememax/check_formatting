@@ -21,3 +21,4 @@ interface from retained design history.
    vnu-message-suppression-ergonomics
    new-checker-architecture-guide
    adopter-onboarding-guide
+   backend-install-policy
