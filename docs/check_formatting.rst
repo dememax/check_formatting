@@ -263,7 +263,34 @@ to validate this adapter.
    The Nu Html Checker performs standards-conformance analysis for HTML,
    XHTML, CSS, and SVG.  The adapter always enables standalone CSS and SVG
    checking and treats warnings as failures.  Additional native options, such
-   as ``--filterfile``, may be supplied through ``[vnu].args``.
+   as ``--filterfile``/``--filterpattern``, may be supplied through
+   ``[vnu].args`` to accept one specific, reviewed finding — for example,
+   Prettier's HTML printer always self-closes void elements
+   (``<meta ... />``), which ``vnu`` reports as an info-level "Trailing
+   slash on void elements" finding, safe to accept where every attribute
+   value in the markup is quoted (a trailing slash immediately after an
+   *unquoted* attribute value becomes part of that value, per the WHATWG
+   parsing algorithm — the qualifier matters).
+
+   Two gotchas, both reproduced against the pinned ``vnu`` release below,
+   before reaching for either suppression flag:
+
+   * ``--skip-info-messages`` does **not** suppress a finding for the
+     purpose of ``--Werror``.  It only changes what ``vnu`` prints; the
+     exit-code decision is made independently, so a filtered-out message
+     still fails the check with no visible reason at all.
+   * ``--filterpattern`` (and each line of ``--filterfile``) must match a
+     finding's **entire** message text, not a fragment — Java
+     ``Matcher.matches()`` semantics, not the substring ``find()``
+     semantics most "regex filter" tools use.  Neither option's own
+     ``--help`` text documents this.  Wrapping a fragment in ``^``/``$``
+     does not fix it either — only wildcarding the fragment (``.*...*``)
+     or supplying the complete message verbatim does.
+
+   :doc:`roadmap/vnu-message-suppression-ergonomics` has the full adoption
+   recipe (with a standalone reproduction fixture), the reasoning above in
+   more depth, and current troubleshooting notes (a malformed
+   ``--filterpattern`` regex currently surfaces as a raw Java stack trace).
 
    ``[vnu].globs`` and ``[web].globs`` are independent declarations with
    intentionally overlapping scope.  ``web`` says which HTML/CSS/JavaScript
@@ -276,8 +303,12 @@ to validate this adapter.
 
       [vnu]
       globs = ["public/**/*.html", "public/**/*.css", "public/**/*.svg"]
-      # Optional native VNU arguments:
-      args = ["--filterfile", ".vnu-filter"]
+      # Accept Prettier's trailing slash on void elements: harmless here
+      # because every attribute value in this project's markup is quoted.
+      args = [
+        "--filterpattern",
+        ".*Trailing slash on void elements has no effect and interacts badly with unquoted attribute values.*",
+      ]
 
    Version ``26.9.5`` (upstream commit ``a9333cb``) is the version installed
    and integration-tested on this host.  Its ``vnu.jar`` SHA-256 is

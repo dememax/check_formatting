@@ -162,7 +162,21 @@ project-specific dialect and suppression choices out of the global wrapper.
 The `vnu` adapter performs strict HTML, XHTML, standalone CSS, and standalone
 SVG conformance analysis. It always supplies `--Werror`, `--also-check-css`,
 and `--also-check-svg`; `[vnu].args` may add native options such as
-`--filterfile`. Its scope is deliberately independent of `[web].globs`:
+`--filterfile`/`--filterpattern` to accept one specific, reviewed finding —
+for example, Prettier's HTML printer always self-closes void elements
+(`<meta ... />`), which `vnu` reports as an info-level "Trailing slash on
+void elements" finding, safe to accept where every attribute value in the
+markup is quoted. Two gotchas before reaching for either flag:
+**`--skip-info-messages` does not work for this** — it only changes what
+`vnu` prints, not whether `--Werror` still exits non-zero, so a
+filtered-out message still fails the check with no visible reason; and
+**a filter must match a finding's entire message text**, not a fragment
+(Java `Matcher.matches()` semantics — `--help` describes it as a "regular
+expression," but neither `--filterpattern` nor `--filterfile` documents
+that it requires a whole-string match). See
+[the vnu message-suppression-ergonomics roadmap epic](docs/roadmap/vnu-message-suppression-ergonomics.rst)
+for the full adoption recipe, reproduction commands, and troubleshooting.
+Its scope is deliberately independent of `[web].globs`:
 `web` identifies files formatted by Prettier, while `vnu` identifies files
 validated by Nu. Overlap is expected and useful, JavaScript belongs only to
 `web`, and SVG may belong only to `vnu`.
@@ -170,8 +184,13 @@ validated by Nu. Overlap is expected and useful, JavaScript belongs only to
 ```toml
 [vnu]
 globs = ["public/**/*.html", "public/**/*.css", "public/**/*.svg"]
-# Optional native VNU arguments:
-args = ["--filterfile", ".vnu-filter"]
+# Accept Prettier's trailing slash on void elements: harmless here because
+# every attribute value in this project's markup is quoted (see the vnu
+# roadmap epic linked above for why that qualifier matters).
+args = [
+  "--filterpattern",
+  ".*Trailing slash on void elements has no effect and interacts badly with unquoted attribute values.*",
+]
 ```
 
 This host uses the exact upstream Nu release `26.9.5` (`a9333cb`), installed
