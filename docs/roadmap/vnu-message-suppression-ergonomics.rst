@@ -6,8 +6,9 @@
 vnu message-suppression ergonomics
 ####################################
 
-:Status: Proposed. Items 1-3 are ready to implement; item 4 is deferred
-   until its own behavioral contract is settled (see below).
+:Status: Items 1-2 shipped (2026-09-07). Item 3 is ready to implement;
+   item 4 is deferred until its own behavioral contract is settled
+   (see below).
 :Sources: ``~/check_formatting-vnu-cli-feedback.md`` (Claude Code, Sonnet 5,
    written while adopting ``vnu`` in the ``sagui`` project, 2026-09-07);
    a second review by Codex against the installed ``vnu`` backend and this
@@ -370,29 +371,37 @@ code or config-schema change, so no TDD cycle applies — but both copies
 need editing consistently, plus a ``check_formatting``/``check_rst`` pass
 before commit, per this project's own dogfooding rule.
 
-===================================================================
-2. Actionable diagnostic for a hidden vnu failure — ready to ship
-===================================================================
+=============================================================
+2. Actionable diagnostic for a hidden vnu failure — shipped
+=============================================================
 
 Promoted from a stretch idea to initial delivery: the failure mode is
 already reproduced (this page's fixture), so no further adopting project's
 evidence is needed to justify it. Trigger condition, corrected from this
 epic's first draft: ``--skip-info-messages`` present in ``[vnu].args`` *and*
 the check failed — not "output was empty" (Finding 2 above shows
-``--format json`` failures are non-empty). On that condition, append:
+``--format json`` failures are non-empty). On that condition, ``_check_vnu``
+appends:
 
    ``vnu`` exited with status 1. ``--skip-info-messages`` can hide findings
    that still cause failure under ``--Werror``. Remove it to inspect the
    findings; use a targeted message filter for accepted exceptions.
 
-Implementation needs ``_check_vnu`` to capture its own subprocess output
-(e.g. via ``cli._run_capture_merged``, already used by the ``kconfig``
-checker) instead of relying only on the outer dispatch's buffering, so it
-can inspect the exit code and append the hint. As established above, this
-does not change what the user sees in terms of live vs. batched output —
-everything is already batched — so the remaining work is a normal,
-testable adapter change: preserve the real failure status, show the hint
-under ``--quiet`` too, and include it in the ``--json`` result payload.
+Simpler than this epic's first draft assumed: the trigger condition needs
+only the exit code ``_check_vnu`` already has from ``cli._run`` and the
+configured ``args`` it already receives as a parameter — nothing about
+``vnu``'s own output text. Capturing that subprocess's output internally
+(e.g. via ``cli._run_capture_merged``) turned out unnecessary; the earlier
+draft only reached for it because an earlier, discarded version of the
+trigger condition inspected output emptiness. Shipped as a plain,
+unconditional ``print()`` alongside the existing ``_run`` call — the same
+pattern already used for the missing-backend ``ERROR:`` line — so it
+survives ``--quiet`` and reaches the ``--json`` result's captured output
+for free, without any dispatch-level plumbing change. Covered by
+``tests/test_check_formatting_vnu.py`` (mocked trigger-condition unit
+tests) and ``tests/test_check_formatting_vnu_integration.py`` (the hidden
+failure and the narrow-filter-still-fails-on-a-real-error acceptance
+criteria, both against the real backend).
 
 ==================================================================
 3. Native-argument policy: reject validation-weakening overrides
@@ -455,41 +464,48 @@ Until these are answered, native ``--filterpattern``/``--filterfile``
 Acceptance criteria
 *********************
 
-Whichever of items 1-3 ship, extend the real-backend integration suite
-(alongside the existing ``tests/test_check_formatting_vnu_integration.py``)
-to cover, at minimum:
+Item 2 is fully covered (both in ``tests/test_check_formatting_vnu.py``'s
+mocked unit tests and ``tests/test_check_formatting_vnu_integration.py``'s
+real-backend tests): the trigger condition itself, that ``--quiet`` never
+suppresses the hint, that it appears in ``--json``'s per-checker ``output``
+field, and the narrow-filter-still-fails-on-an-unrelated-error case.
 
-* The documented single-message suppression passes, and stays stable
-  across a repeated ``--fix`` then ``check_formatting`` cycle.
-* A fixture containing **both** the accepted message and an unrelated real
-  error (e.g. a duplicate ``id``) still fails — reproduced manually during
-  this revision (the narrow filter suppressed only the accepted message;
-  the duplicate-``id`` error still exited 1), now needs a permanent
-  regression test rather than a one-off manual check.
-* The item-2 diagnostic appears in normal, ``--quiet``, and ``--json``
-  modes, and never changes the underlying pass/fail result.
+Still open, and not something this repository's own test suite can
+rehearse (``check_formatting`` has no Prettier-formatted HTML of its own to
+dogfood ``vnu`` against): that the documented single-message suppression
+stays stable across a repeated ``--fix`` then ``check_formatting`` cycle in
+a real consuming project. ``sagui`` reported exactly this working
+(``check_formatting --all`` → 9/9 checkers passing, repeatably) — cited as
+reported evidence, not re-verified here — and it should stay true given
+``vnu`` is a deterministic, non-mutating analysis tool and Prettier is a
+deterministic formatter, but neither guarantee has a permanent regression
+test backing it in this repository.
+
+Once item 3 ships, extend the real-backend integration suite further to
+cover:
+
 * A missing ``--filterfile`` path and a malformed ``--filterpattern``
   regex are both covered — the former already produces a clean vnu-native
   error, the latter currently a raw Java stack trace; decide whether
   ``check_formatting`` should catch and reword the latter, and document
   whichever choice is made either way.
-* Once item 3 ships: ``--errors-only``/``--exit-zero-always`` in
-  ``[vnu].args`` are rejected at config-load time, with a clear error
-  naming the option and why.
+* ``--errors-only``/``--exit-zero-always`` in ``[vnu].args`` are rejected
+  at config-load time, with a clear error naming the option and why.
 
 ************************
 Recommended sequencing
 ************************
 
-Correct this plan and its adoption recipe (this revision) → regression
-tests and the item-2 diagnostic → item 3's native-argument policy → only
-then reconsider item 4. This ordering is this epic's own judgment call, not
-something either round of feedback specified outright: the item-2
-diagnostic no longer waits on a second adopting project, since its failure
-mode is now reproduced independently of ``sagui`` (this page's own
-fixture); a second project's experience (or ``sagui`` needing a second
-suppressed message) remains useful, non-blocking evidence for whether item
-4 is ever worth building, not a precondition for items 1-3.
+Correct this plan and its adoption recipe (this revision, shipped) →
+regression tests and the item-2 diagnostic (shipped) → item 3's
+native-argument policy → only then reconsider item 4. This ordering is
+this epic's own judgment call, not something either round of feedback
+specified outright: the item-2 diagnostic did not wait on a second
+adopting project, since its failure mode was reproduced independently of
+``sagui`` (this page's own fixture); a second project's experience (or
+``sagui`` needing a second suppressed message) remains useful, non-blocking
+evidence for whether item 4 is ever worth building, not a precondition for
+item 3.
 
 **************
 Out of scope
