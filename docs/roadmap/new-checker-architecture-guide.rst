@@ -6,7 +6,8 @@
 Architecture guide for implementing a new checker
 ###################################################
 
-:Status: Proposed.
+:Status: Shipped (2026-09-07) as :doc:`../architecture`, linked from both
+   README.md and AGENTS.md.
 :Sources: A cold-reader review of this project's own documentation
    (README.md, :doc:`../check_formatting`, AGENTS.md) from the perspective
    of a contributor about to implement a fifteenth checker, done in the
@@ -255,8 +256,8 @@ reader sees both a report-only and a mutating checker before generalizing.
 Proposed work
 ***************
 
-Write a single architecture/contributor document (``CONTRIBUTING.md`` or
-``docs/architecture.rst``, linked from both README.md and AGENTS.md) with:
+Shipped as :doc:`../architecture`, linked from both README.md and
+AGENTS.md, covering:
 
 1. A concepts section naming the package's modules
    (``__init__``/``_config``/``_registry``/``_checkers``/``_selection``/
@@ -300,11 +301,15 @@ Write a single architecture/contributor document (``CONTRIBUTING.md`` or
    one sentence per helper on when it's the right choice.
 
 Pure documentation — no production code or config-schema change, so no TDD
-cycle applies, matching item 1 of the vnu epic. Acceptance criteria for the
-eventual document, verified by a dry run — a future contributor (or a
-fresh agent session) implementing a trivial synthetic checker using only
-this document plus the existing per-checker examples, needing no other
-undocumented lookup — should include demonstrating:
+cycle applied, matching item 1 of the vnu epic. Item 5's own open question
+is resolved in the shipped document: it introduces the ``shell``/``vnu``
+``_integration.py`` split as an explicit new policy for future checkers,
+labeled as such rather than presented as already-established practice.
+Acceptance criteria for the shipped document, to be verified by an actual
+dry run whenever the next checker is implemented — a contributor (or a
+fresh agent session) using only :doc:`../architecture` plus the existing
+per-checker examples, needing no other undocumented lookup — include
+demonstrating:
 
 * ``explicit_files=None``, ``explicit_files=[]``, and a non-empty
   ``explicit_files`` list each produce distinct, correct selection
@@ -328,16 +333,13 @@ undocumented lookup — should include demonstrating:
 Recommended sequencing
 ************************
 
-No dependency on the vnu epic's own remaining items — this can proceed
-independently, at any time. Codex's review of both roadmap epics together
-suggested treating the sibling :doc:`adopter-onboarding-guide` epic's
-tested CI/baseline example as the higher-priority piece of the two, with
-this architecture guide corrected and following it; that ordering is
-adopted here rather than contested; see that epic's own sequencing section.
-Worth doing before the next new checker is actually added, since that is
-exactly the moment this gap turns into either a slow, copy-and-hope
-implementation or a set of new, undocumented conventions invented ad hoc
-rather than reusing the ones already established.
+Codex's review of both roadmap epics together suggested treating the
+sibling :doc:`adopter-onboarding-guide` epic's tested CI/baseline example
+as the higher-priority piece of the two, with this architecture guide
+corrected and following it — adopted, and this epic shipped immediately
+after that epic's items 2/3/5. The real test of the shipped document is
+still ahead: the dry run described above, whenever the next new checker is
+actually implemented.
 
 **************
 Out of scope

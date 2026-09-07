@@ -17,6 +17,9 @@ status, file globs/directories/paths, and any tool-specific settings are
 declared once, per project, in a committed `.check_formatting.toml`.
 
 The detailed reference is in [docs/check_formatting.rst](docs/check_formatting.rst).
+Implementing a new checker? See
+[docs/architecture.rst](docs/architecture.rst) for the internal
+contract every existing checker already follows.
 
 ## Installation
 

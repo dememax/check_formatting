@@ -9,7 +9,10 @@ A project-agnostic formatting/lint checker distributed as a Python package
 under `src/check_formatting/`, plus its test suite (`tests/`). See
 [README.md](README.md) for what the tool does and how a consuming project
 configures it. This file covers conventions for working *on* the tool
-itself.
+itself. Implementing a new checker specifically? See
+[docs/architecture.rst](docs/architecture.rst) for the internal package
+layout, the checker function contract, and a worked example — this file's
+conventions below (TDD, commits, formatting) still apply on top of it.
 
 ## File header comment
 
