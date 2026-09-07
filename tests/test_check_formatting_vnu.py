@@ -249,3 +249,64 @@ def test_vnu_is_registered_as_analysis_only() -> None:
     assert checker.label == "vnu (HTML/CSS/SVG conformance)"
     assert checker.auto_fix is False
     assert "no automatic fix" in checker.fix_command_fn(None, False)  # type: ignore[arg-type]
+
+
+def test_check_vnu_skip_info_messages_hint_appears_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """See docs/roadmap/vnu-message-suppression-ergonomics.rst, Finding 1: a
+    filtered-out info message still fails ``--Werror`` with no visible
+    output, so ``check_formatting`` must explain why itself.
+    """
+    (tmp_path / "index.html").write_text("content\n")
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vnu")
+    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 1)
+
+    ok = check_formatting._check_vnu(tmp_path, globs=["*.html"], args=["--skip-info-messages"])
+
+    assert ok is False
+    out = capsys.readouterr().out
+    assert "--skip-info-messages" in out
+    assert "vnu exited with status 1" in out
+
+
+def test_check_vnu_no_hint_when_skip_info_messages_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "index.html").write_text("content\n")
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vnu")
+    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 1)
+
+    ok = check_formatting._check_vnu(tmp_path, globs=["*.html"], args=["--filterfile", ".vnu-filter"])
+
+    assert ok is False
+    assert "--skip-info-messages" not in capsys.readouterr().out
+
+
+def test_check_vnu_no_hint_on_success_even_with_skip_info_messages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "index.html").write_text("content\n")
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vnu")
+    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 0)
+
+    ok = check_formatting._check_vnu(tmp_path, globs=["*.html"], args=["--skip-info-messages"])
+
+    assert ok is True
+    assert "vnu exited with status" not in capsys.readouterr().out
+
+
+def test_check_vnu_skip_info_messages_hint_survives_quiet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Never suppressed by ``--quiet``, matching this project's convention
+    that ``--quiet`` hides chrome, never a finding or failure explanation.
+    """
+    (tmp_path / "index.html").write_text("content\n")
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/vnu")
+    monkeypatch.setattr(check_formatting, "_run", lambda cmd, cwd: 1)
+
+    ok = check_formatting._check_vnu(tmp_path, globs=["*.html"], args=["--skip-info-messages"], quiet=True)
+
+    assert ok is False
+    assert "--skip-info-messages" in capsys.readouterr().out

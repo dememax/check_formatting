@@ -138,6 +138,60 @@ def test_real_vnu_warnings_are_failures(tmp_path: Path) -> None:
     assert "lacks heading" in result.stdout
 
 
+def test_real_vnu_skip_info_messages_hint_on_hidden_failure(tmp_path: Path) -> None:
+    """See docs/roadmap/vnu-message-suppression-ergonomics.rst, Finding 1:
+    a self-closed void element makes real ``vnu`` fail with an info-level
+    finding; ``--skip-info-messages`` hides it from ``vnu``'s own output
+    while ``--Werror`` still fails, so ``check_formatting`` must explain why
+    itself rather than reporting a bare, unexplained FAIL.
+    """
+    _write_project(
+        tmp_path,
+        {
+            "assets/index.html": (
+                '<!doctype html><html lang="en"><head><meta charset="utf-8" />'
+                "<title>Void element</title></head><body><main><h1>Void element</h1>"
+                "</main></body></html>\n"
+            )
+        },
+        args=["--skip-info-messages"],
+    )
+
+    result = _run_vnu_check(tmp_path)
+
+    assert result.returncode == 1
+    assert "vnu exited with status 1" in result.stdout
+    assert "--skip-info-messages" in result.stdout
+
+
+def test_real_vnu_narrow_filter_still_fails_on_unrelated_error(tmp_path: Path) -> None:
+    """See docs/roadmap/vnu-message-suppression-ergonomics.rst, "Acceptance
+    criteria": accepting one specific, reviewed finding by its complete
+    message text must not mask a genuinely different, unrelated error in
+    the same document.
+    """
+    _write_project(
+        tmp_path,
+        {
+            "assets/index.html": (
+                '<!doctype html><html lang="en"><head><meta charset="utf-8" />'
+                '<title>Mixed</title></head><body><main><h1 id="dup">One</h1>'
+                '<h2 id="dup">Two</h2></main></body></html>\n'
+            )
+        },
+        args=[
+            "--filterpattern",
+            ".*Trailing slash on void elements has no effect and interacts badly with unquoted attribute values.*",
+        ],
+    )
+
+    result = _run_vnu_check(tmp_path)
+
+    assert result.returncode == 1
+    assert "Trailing slash on void elements" not in result.stdout
+    assert "Duplicate ID" in result.stdout
+
+
 def test_real_vnu_fix_mode_never_modifies_files(tmp_path: Path) -> None:
     target_content = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
