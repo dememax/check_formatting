@@ -40,6 +40,19 @@ _SHELL: Final = ("shell", "globs")
 _YAML: Final = ("yaml", "globs")
 _RST: Final = ("rst", "dir")
 
+# Native vnu options that silently weaken the adapter's own advertised
+# strict HTML/CSS/SVG validation contract rather than narrowing one
+# specific, reviewed finding — see docs/roadmap/
+# vnu-message-suppression-ergonomics.rst, Finding 3. ``--errors-only``/
+# ``--exit-zero-always`` bypass ``--Werror``'s exit-code guarantee outright;
+# ``--css``/``--svg`` force every selected file to be parsed as CSS/SVG
+# regardless of its real type, confirmed against the installed backend even
+# for individually named files (not just the directory-mode use this
+# adapter never makes). A project that wants to accept a specific finding
+# still has the fully supported path: ``--filterpattern``/``--filterfile``
+# in the same ``[vnu].args``.
+_VNU_FORBIDDEN_ARGS: Final = frozenset({"--errors-only", "--exit-zero-always", "--css", "--svg"})
+
 # Known keys per config section (project-specific paths/globs/targets).
 # Mypy may override the Python (Ruff) target set, with Python dirs as fallback.
 _CONFIG_FIELDS = (
@@ -146,6 +159,7 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
     mypy_dirs: list[str] = _optional_section(data, *_MYPY, _require_str_list, []) if "mypy" in data else python_dirs
     vnu_table = _require_table(data, "vnu") if "vnu" in data else None
     vnu_args = _require_str_list(vnu_table, "args", "[vnu]") if vnu_table is not None and "args" in vnu_table else []
+    _validate_vnu_args(vnu_args, "[vnu].args")
     return ProjectConfig(
         checks=checks,
         cpp_globs=_optional_section(data, *_CPP, _require_str_list, []),
@@ -162,6 +176,19 @@ def _load_project_config(root: pathlib.Path) -> ProjectConfig:
         yaml_globs=_optional_section(data, *_YAML, _require_str_list, []),
         rst_dir=_optional_section(data, *_RST, _require_str, ""),
     )
+
+
+def _validate_vnu_args(args: Sequence[str], where: str) -> None:
+    """Reject native vnu options that would weaken vnu's own advertised
+    strict-validation contract instead of narrowing one specific finding
+    (see :data:`_VNU_FORBIDDEN_ARGS`)."""
+    forbidden = sorted(set(args) & _VNU_FORBIDDEN_ARGS)
+    if forbidden:
+        _config_error(
+            f"{where}: {', '.join(forbidden)} would weaken vnu's strict-validation contract "
+            "(see docs/roadmap/vnu-message-suppression-ergonomics.rst, Finding 3) — "
+            "use --filterpattern/--filterfile to accept a specific finding instead"
+        )
 
 
 def _validate_check_names(checks: Sequence[str], where: str) -> None:
