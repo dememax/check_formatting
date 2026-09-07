@@ -292,6 +292,17 @@ to validate this adapter.
    more depth, and current troubleshooting notes (a malformed
    ``--filterpattern`` regex currently surfaces as a raw Java stack trace).
 
+   ``--errors-only``, ``--exit-zero-always``, ``--css``, and ``--svg`` are
+   rejected as ``[vnu].args`` entries — a hard configuration error at load
+   time, the same tier as this project's other schema validation — because
+   each silently weakens the adapter's advertised always-strict,
+   always-HTML/CSS/SVG contract rather than narrowing one specific finding:
+   the first two bypass ``--Werror``'s exit-code guarantee outright, and the
+   latter two force every selected file to be parsed as the wrong type,
+   confirmed against the installed backend even for individually named
+   files.  A project that wants to accept a specific, reviewed finding uses
+   ``--filterpattern``/``--filterfile`` instead.
+
    ``[vnu].globs`` and ``[web].globs`` are independent declarations with
    intentionally overlapping scope.  ``web`` says which HTML/CSS/JavaScript
    files Prettier owns; ``vnu`` says which HTML/XHTML/CSS/SVG files Nu

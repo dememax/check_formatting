@@ -176,6 +176,11 @@ expression," but neither `--filterpattern` nor `--filterfile` documents
 that it requires a whole-string match). See
 [the vnu message-suppression-ergonomics roadmap epic](docs/roadmap/vnu-message-suppression-ergonomics.rst)
 for the full adoption recipe, reproduction commands, and troubleshooting.
+`--errors-only`, `--exit-zero-always`, `--css`, and `--svg` are rejected as
+`[vnu].args` entries — a hard config error at load time — because each
+silently weakens the adapter's own always-strict, always-HTML/CSS/SVG
+contract rather than narrowing one specific finding; use
+`--filterpattern`/`--filterfile` to accept a specific finding instead.
 Its scope is deliberately independent of `[web].globs`:
 `web` identifies files formatted by Prettier, while `vnu` identifies files
 validated by Nu. Overlap is expected and useful, JavaScript belongs only to

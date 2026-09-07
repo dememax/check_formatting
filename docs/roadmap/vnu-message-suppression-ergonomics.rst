@@ -6,9 +6,8 @@
 vnu message-suppression ergonomics
 ####################################
 
-:Status: Items 1-2 shipped (2026-09-07). Item 3 is ready to implement;
-   item 4 is deferred until its own behavioral contract is settled
-   (see below).
+:Status: Items 1-3 shipped (2026-09-07). Item 4 is deferred until its own
+   behavioral contract is settled (see below).
 :Sources: ``~/check_formatting-vnu-cli-feedback.md`` (Claude Code, Sonnet 5,
    written while adopting ``vnu`` in the ``sagui`` project, 2026-09-07);
    a second review by Codex against the installed ``vnu`` backend and this
@@ -403,25 +402,51 @@ tests) and ``tests/test_check_formatting_vnu_integration.py`` (the hidden
 failure and the narrow-filter-still-fails-on-a-real-error acceptance
 criteria, both against the real backend).
 
-==================================================================
-3. Native-argument policy: reject validation-weakening overrides
-==================================================================
+============================================================================
+3. Native-argument policy: reject validation-weakening overrides — shipped
+============================================================================
 
-New in this revision. ``[vnu].args`` currently accepts any native option
-unfiltered, but Finding 3 shows ``--errors-only`` and ``--exit-zero-always``
-directly undermine the adapter's own "always strict" promise — the second
-can make a document with a real, printed error report as ``✓ PASS``.
-Recommendation: reject both at config-load time (a hard error, the same
-tier as this project's existing ``.check_formatting.toml`` schema
-validation) rather than let them through as ordinary native options,
-given "strict validation" is the contract this checker advertises. A
-project that wants to accept a specific finding still has the fully
-supported path: a targeted ``--filterpattern``/``--filterfile`` entry
-(items 1-2 above), which narrows exactly one message rather than an entire
-severity class. Also worth a follow-up audit, not yet performed: whether
-any other native ``vnu`` option silently narrows the advertised HTML/CSS/SVG
-scope (e.g. skips a file type ``--also-check-css``/``--also-check-svg``
-already turned on) the same way these two narrow the exit-code guarantee.
+``[vnu].args`` is now validated at config-load time (the same tier as this
+project's other ``.check_formatting.toml`` schema checks):
+``--errors-only``, ``--exit-zero-always``, ``--css``, and ``--svg`` are
+hard rejected. A project that wants to accept a specific finding still has
+the fully supported path: a targeted ``--filterpattern``/``--filterfile``
+entry (items 1-2 above), which narrows exactly one message rather than an
+entire severity class or file-type interpretation.
+
+The reject list grew from the original two to all four during this
+revision, closing the "follow-up audit, not yet performed" gap the
+previous revision left open. Reproduced directly against the installed
+backend before deciding the final list:
+
+* ``--errors-only`` and ``--exit-zero-always`` (Finding 3, original scope)
+  bypass ``--Werror``'s exit-code guarantee outright — confirmed.
+* ``--css``/``--svg`` ("Force all documents to be checked as CSS/SVG,
+  regardless of extension") force every selected file to be parsed as the
+  wrong type, confirmed even for individually named files, not only the
+  directory-mode use this adapter never makes — e.g. forcing a real
+  ``.html`` file to be parsed as CSS produces cascading, meaningless "Style
+  sheets should not include HTML syntax" errors instead of real HTML
+  conformance analysis. Added to the reject list on Maxime's explicit
+  decision (over "leave item 3 at its original two" and "switch to an
+  allowlist instead") once confirmed equally severe to the original two.
+* ``--skip-non-html``/``--skip-non-css``/``--skip-non-svg`` ("skip
+  documents that don't have the matching extension") were hypothesized as
+  a similar risk but **disproven** by direct testing: passing
+  ``--skip-non-html`` alongside an explicit ``.css`` file still checked
+  that file normally (their own ``--help`` examples only ever show them
+  against a ``DIRECTORY`` argument, and this adapter always passes
+  individually named files, never a directory). Not rejected.
+* ``--no-langdetect`` ("disables language detection... for missing or
+  mislabeled ``html[lang]``") was also hypothesized, but its effect could
+  not be reproduced on either a missing-``lang`` or a mismatched-``lang``
+  fixture in this session — dropped from consideration rather than
+  asserted as either safe or dangerous without evidence.
+* ``--html``/``--xml`` (force the HTML or XML parser for ``.xhtml``/
+  ``.xht``/``.html`` files) change parsing mode, not scope or exit-code
+  semantics, and are plausibly a legitimate choice for a project with
+  strict XHTML content — not rejected, but also not independently
+  audited beyond that judgment call.
 
 ============================================================
 4. ``[vnu].ignore_messages`` convenience option — deferred
@@ -481,16 +506,17 @@ reported evidence, not re-verified here — and it should stay true given
 deterministic formatter, but neither guarantee has a permanent regression
 test backing it in this repository.
 
-Once item 3 ships, extend the real-backend integration suite further to
-cover:
+Item 3 is fully covered: ``tests/test_check_formatting_vnu.py`` verifies
+each of the four rejected options fails config-load with a clear message
+naming the option, and that ordinary safe native options (e.g.
+``--filterpattern``, ``--asciiquotes``) still pass through unaffected.
 
-* A missing ``--filterfile`` path and a malformed ``--filterpattern``
-  regex are both covered — the former already produces a clean vnu-native
-  error, the latter currently a raw Java stack trace; decide whether
-  ``check_formatting`` should catch and reword the latter, and document
-  whichever choice is made either way.
-* ``--errors-only``/``--exit-zero-always`` in ``[vnu].args`` are rejected
-  at config-load time, with a clear error naming the option and why.
+Still genuinely open, not gated on any remaining item: whether a missing
+``--filterfile`` path and a malformed ``--filterpattern`` regex are both
+adequately handled — the former already produces a clean vnu-native error
+(needs no further work), the latter currently a raw Java stack trace;
+decide whether ``check_formatting`` should catch and reword it, and cover
+whichever choice is made with a test.
 
 ************************
 Recommended sequencing
@@ -498,14 +524,14 @@ Recommended sequencing
 
 Correct this plan and its adoption recipe (this revision, shipped) →
 regression tests and the item-2 diagnostic (shipped) → item 3's
-native-argument policy → only then reconsider item 4. This ordering is
-this epic's own judgment call, not something either round of feedback
-specified outright: the item-2 diagnostic did not wait on a second
-adopting project, since its failure mode was reproduced independently of
-``sagui`` (this page's own fixture); a second project's experience (or
-``sagui`` needing a second suppressed message) remains useful, non-blocking
-evidence for whether item 4 is ever worth building, not a precondition for
-item 3.
+native-argument policy (shipped) → only then reconsider item 4. This
+ordering was this epic's own judgment call, not something either round of
+feedback specified outright: the item-2 diagnostic did not wait on a
+second adopting project, since its failure mode was reproduced
+independently of ``sagui`` (this page's own fixture); a second project's
+experience (or ``sagui`` needing a second suppressed message) remains
+useful, non-blocking evidence for whether item 4 is ever worth building,
+not a precondition for anything already shipped.
 
 **************
 Out of scope
