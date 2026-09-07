@@ -86,17 +86,21 @@ outside that one test file explains it, and a new checker written with a
 direct submodule import would work today and only fail once a test tried
 to monkeypatch it.
 
-Adding a checker touches four files, not three as this epic's first draft
-said: ``_config.py`` (a ``(section, key)`` tuple added to
-``_CONFIG_FIELDS``, a ``ProjectConfig`` field, the TOML-parsing logic),
-``_registry.py`` (a ``Checker(label, fn, kwargs_fn, fix_command_fn,
-auto_fix)`` entry plus an import), ``_checkers.py`` (the ``_check_X``
-function itself), and — missed entirely before — ``cli/__init__.py``'s own
-``_CHECKERS`` re-export surface that ``run_one`` dispatches through. The
-``Checker`` ``NamedTuple``'s own docstring narrates *why* ``_registry.py``
-used to be three separately hand-synced tables that silently drifted — a
-real lesson from this project's own history, invisible until a contributor
-happens to read that one class's docstring.
+Adding a checker still edits exactly three files — corrected back from
+this epic's own second revision, which briefly claimed a fourth:
+``_config.py`` (a ``(section, key)`` tuple added to ``_CONFIG_FIELDS``, a
+``ProjectConfig`` field, the TOML-parsing logic), ``_registry.py`` (a
+``Checker(label, fn, kwargs_fn, fix_command_fn, auto_fix)`` entry plus an
+import), and ``_checkers.py`` (the ``_check_X`` function itself).
+``cli/__init__.py`` needs no edit at all: it imports ``_CHECKERS`` once
+from ``_registry.py`` and re-exports it in ``__all__``, both already done
+and shared by reference, so a new dict entry in ``_registry.py`` is visible
+to ``run_one``'s dispatch immediately. What a contributor *does* need to
+understand about ``cli/__init__.py``, without editing it, is the re-export
+convention above — the ``Checker`` ``NamedTuple``'s own docstring narrates
+*why* ``_registry.py`` used to be three separately hand-synced tables that
+silently drifted, a real lesson from this project's own history, invisible
+until a contributor happens to read that one class's docstring.
 ``_CONFIG_FIELDS``/``_CONFIG_SECTIONS`` in ``_config.py`` is a second,
 separate instance of the exact same "one shared table, not several
 hand-synced ones" pattern, undocumented as such.
@@ -280,10 +284,10 @@ Write a single architecture/contributor document (``CONTRIBUTING.md`` or
 4. A "adding a checker, step by step" walkthrough using ``vnu`` as the
    primary worked example (paired with one mutating/git-scoped example,
    per the finding above) — the exact edits to ``_config.py``,
-   ``_registry.py``, ``_checkers.py``, and ``cli/__init__.py``'s
-   ``_CHECKERS`` surface, in order, cross-referencing each real edit
-   ``vnu``'s own addition made, ending with the RED tests written before
-   the implementation that makes them pass.
+   ``_registry.py``, and ``_checkers.py``, in order, cross-referencing each
+   real edit ``vnu``'s own addition made, noting that ``cli/__init__.py``
+   needs no edit at all, ending with the RED tests written before the
+   implementation that makes them pass.
 5. The two kinds of test evidence this project's TDD policy already asks
    for — mocked dispatch-logic tests and real-backend behavior tests —
    named explicitly, with the ``shell``/``vnu`` ``_integration.py`` split
