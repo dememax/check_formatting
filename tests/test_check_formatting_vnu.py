@@ -222,6 +222,39 @@ def test_vnu_native_args_are_optional(tmp_path: Path) -> None:
     assert config.vnu_args == []
 
 
+@pytest.mark.parametrize("forbidden_arg", ["--errors-only", "--exit-zero-always", "--css", "--svg"])
+def test_vnu_args_reject_validation_weakening_options(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], forbidden_arg: str
+) -> None:
+    """See docs/roadmap/vnu-message-suppression-ergonomics.rst, Finding 3:
+    ``--errors-only``/``--exit-zero-always`` bypass ``--Werror``'s exit-code
+    guarantee outright, and ``--css``/``--svg`` force every selected file to
+    be parsed as CSS/SVG regardless of its real type — both silently weaken
+    the adapter's advertised strict HTML/CSS/SVG validation contract instead
+    of narrowing one specific finding.
+    """
+    (tmp_path / ".check_formatting.toml").write_text(
+        f'checks = ["vnu"]\n\n[vnu]\nglobs = ["*.html"]\nargs = ["{forbidden_arg}"]\n'
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        check_formatting._load_project_config(tmp_path)
+
+    assert exc_info.value.code == 1
+    assert forbidden_arg in capsys.readouterr().out
+
+
+def test_vnu_args_allow_safe_native_options(tmp_path: Path) -> None:
+    (tmp_path / ".check_formatting.toml").write_text(
+        'checks = ["vnu"]\n\n[vnu]\nglobs = ["*.html"]\n'
+        'args = ["--filterpattern", ".*Trailing slash.*", "--asciiquotes"]\n'
+    )
+
+    config = check_formatting._load_project_config(tmp_path)
+
+    assert config.vnu_args == ["--filterpattern", ".*Trailing slash.*", "--asciiquotes"]
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [("globs", '"*.html"'), ("args", '"--errors-only"')],
