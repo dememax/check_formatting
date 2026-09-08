@@ -8,7 +8,7 @@
 checks = ["python", "mypy", "rst"]
 
 [python]
-dirs = ["src", "docs/conf.py", "setup.py", "tests"]
+dirs = ["src", "docs/conf.py", "setup.py", "tools", "tests"]
 
 [rst]
 dir = "docs"

@@ -23,6 +23,8 @@ check_formatting = "check_formatting.cli:main"
 
 [project.urls]
 Repository = "https://github.com/dememax/check_formatting"
+Documentation = "https://github.com/dememax/check_formatting/blob/main/docs/guide.rst"
+Issues = "https://github.com/dememax/check_formatting/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "check_formatting.__version__" }

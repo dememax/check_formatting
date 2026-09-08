@@ -441,19 +441,33 @@ adopter's installation and a contributor's ordinary pre-commit loop.
    ``PYTHONPATH=src python3.14 -m check_formatting --all``.
 #. Add a RED packaging test for the intended release in
    ``tests/test_check_formatting_packaging.py`` and commit it separately.
-#. Synchronize the public version in ``src/check_formatting/__init__.py``,
-   Sphinx's ``release`` in ``docs/conf.py``, and the explicit wheel example in
-   ``README.md``.  Roadmap ``Versions involved`` fields are historical
+#. Change the single public version in ``src/check_formatting/__init__.py``.
+   Sphinx imports that value directly; the installation examples contain no
+   second release literal. Roadmap ``Versions involved`` fields are historical
    evidence and are not blanket-rewritten.
-#. Build a wheel from the release-candidate source tree with
-   ``python3.14 -m pip wheel --wheel-dir dist .``.  Install that local source
-   or wheel into the standalone target environment, then verify both
-   ``check_formatting --version`` and at least one complete consuming-project
-   ``check_formatting --all`` run.  A source-tree dogfood run alone does not
-   prove the installed copy was updated.
-#. Commit the synchronized release bump with its validation record.  Create or
-   publish a tag/package only when that release channel is explicitly in
-   scope; building and installing a local wheel is not itself publication.
+#. Commit the release bump after its source-tree tests pass. The reproducible
+   builder requires a clean commit and uses that commit's timestamp as
+   ``SOURCE_DATE_EPOCH``; building from an uncommitted release change would
+   leave the artifact without an exact source identity.
+#. Use a Python environment containing exactly the versions pinned in
+   ``tools/release-requirements.txt`` and run ``python3.14
+   tools/build_wheel.py``. The builder produces only the pure-Python wheel and
+   adjacent ``.whl.sha256`` file: this project deliberately distributes no
+   sdist and keeps its RST documentation in the repository, not the wheel.
+#. The builder must complete both identical builds, ZIP validation, checksum
+   generation, and its clean standalone install/``pip check``/help/version/
+   uninstall smoke test before copying either local artifact to ``dist/``.
+#. Install that exact wheel into the real standalone target with
+   ``python3.14 tools/install_standalone.py install``. Use ``--recreate`` only
+   for an explicit migration from a system-site environment or unmanaged
+   launcher. Verify ``check_formatting --version`` and at least one complete
+   consuming-project ``check_formatting --all`` run. A source-tree dogfood run
+   alone does not prove the installed copy was updated.
+#. A version, its ignored local wheel, and checksum are a local release. A Git
+   tag or a downloadable wheel/checksum attached to a hosting-service release
+   is a separate publication channel and is created only when explicitly in
+   scope. A "release asset" means such an attached downloadable file; it is
+   not required for this repository-local installation model.
 
 *********************
 Acceptance criteria

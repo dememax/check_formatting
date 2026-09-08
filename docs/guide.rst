@@ -29,21 +29,39 @@ Installation
 **************
 
 The utility is distributed as a Python package and requires Python 3.14 or
-newer.  For a standalone installation under ``~/opt``, isolate its own Python
-package without requiring callers to activate that environment::
+newer.  Its supported standalone layout uses an ordinary isolated environment
+at ``~/opt/check_formatting`` and a project-managed stable launcher in
+``~/opt/bin``. Build and install it from a clean, committed checkout without
+activating that environment::
 
-   python3.14 -m venv "${HOME}/opt/check_formatting"
-   "${HOME}/opt/check_formatting/bin/python" -m pip install /path/to/check_formatting
-   export PATH="${HOME}/opt/check_formatting/bin:${PATH}"
+   cd /path/to/check_formatting
+   python3.14 tools/build_wheel.py
+   python3.14 tools/install_standalone.py install
+   export PATH="${HOME}/opt/bin:${PATH}"
    check_formatting --help
    check_formatting --version
 
-Persist that ``PATH`` entry in the shell's startup configuration.  This
-environment isolates the utility's Python package only; backend executables
-still resolve from the invoking process's ``PATH``.  Installing into another
-already-selected Python environment is also supported::
+Persist that ``PATH`` entry in the shell's startup configuration. Backend
+executables still resolve from the invoking process's ``PATH``. The builder
+requires the exact tools in ``tools/release-requirements.txt``, derives the
+archive timestamp from the source commit, proves two builds byte-identical,
+emits an adjacent ``.whl.sha256`` file, and smoke-tests a fresh standalone
+installation before placing either local artifact under ``dist/``. The
+repository, rather than the wheel, remains the source of the RST documentation.
 
-   python3.14 -m pip install /path/to/check_formatting
+An existing system-site environment or unmanaged launcher is never replaced
+implicitly; migrate it once with::
+
+   python3.14 tools/install_standalone.py install --recreate
+
+Installing into another already-selected Python environment is also supported
+after checking the wheel against its generated sidecar::
+
+   sha256sum -c dist/check_formatting-VERSION-py3-none-any.whl.sha256
+   python3.14 -m pip install dist/check_formatting-VERSION-py3-none-any.whl
+
+Replace ``VERSION`` with the version printed by the builder. The standalone
+installer derives the exact filename from the checkout automatically.
 
 ``--version`` prints the release version followed by the copyright and
 license lines; the same two lines are appended to ``--help``'s epilog,
@@ -57,6 +75,11 @@ The console entry point and the selected environment's module invocation are
 equivalent.  For the standalone installation above, the latter is::
 
    "${HOME}/opt/check_formatting/bin/python" -m check_formatting
+
+Update by rebuilding from the new clean commit and running the same installer.
+Remove both the dedicated environment and its owned launcher with::
+
+   python3.14 tools/install_standalone.py uninstall
 
 The setuptools build hook repopulates the staged ``check_formatting`` package
 from source on every build.  Reusing a checkout's ``build/`` directory

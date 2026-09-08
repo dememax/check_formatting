@@ -1,0 +1,7 @@
+# Copyright (C) 2026 Maxime P. DEMENTYEV
+# SPDX-License-Identifier: GPL-3.0-only
+# Reproducible wheel-build toolchain — check_formatting project
+
+pip==26.1.2
+setuptools==83.0.0
+wheel==0.47.0

@@ -26,33 +26,74 @@ contract every existing checker already follows.
 
 ## Installation
 
-Requires Python 3.14 or newer. For a standalone utility under `~/opt`, keep
-its Python package isolated without activating that environment:
+Requires Python 3.14 or newer. The supported standalone layout keeps one
+ordinary isolated virtual environment at `~/opt/check_formatting` and exposes
+it through the stable `~/opt/bin/check_formatting` launcher. The caller never
+activates the environment, and only `~/opt/bin` needs to be on `PATH` no matter
+how many private utilities use that prefix.
+
+Build the installable wheel from a clean, committed checkout, then let the
+standalone installer verify its adjacent SHA-256 file and create both the
+environment and launcher:
 
 ```bash
-python3.14 -m venv "${HOME}/opt/check_formatting"
-"${HOME}/opt/check_formatting/bin/python" -m pip install /path/to/check_formatting
-export PATH="${HOME}/opt/check_formatting/bin:${PATH}"
+cd /path/to/check_formatting
+python3.14 tools/build_wheel.py
+python3.14 tools/install_standalone.py install
+export PATH="${HOME}/opt/bin:${PATH}"
 check_formatting --help
 check_formatting --version
 ```
 
-Persist that `PATH` entry in the shell's startup configuration. This
-environment isolates the utility's own Python package; it does not need to be
-activated and does not change backend resolution—backend executables still
-come from the invoking process's `PATH`.
+Persist that `PATH` entry in the shell's startup configuration. The generated
+launcher belongs to this installation process; the corresponding `uninstall`
+command below removes it rather than leaving a broken command behind. Backend
+executables still come from the invoking process's `PATH`, never from a
+consuming project's Python virtual environment.
+
+`tools/build_wheel.py` requires the exact release tools pinned in
+`tools/release-requirements.txt`. If the current Python environment does not
+already provide them, create a temporary build environment rather than
+changing the host's Python installation:
+
+```bash
+python3.14 -m venv /tmp/check-formatting-release-tools
+/tmp/check-formatting-release-tools/bin/python -m pip install \
+  -r tools/release-requirements.txt
+/tmp/check-formatting-release-tools/bin/python tools/build_wheel.py
+```
+
+The builder derives `SOURCE_DATE_EPOCH` from the source commit, builds the
+wheel twice, requires byte-for-byte identity, checks the archive, and exercises
+a clean standalone install, `pip check`, `--help`, `--version`, and uninstall.
+Only then does it place the wheel and its `.whl.sha256` sidecar under the
+ignored `dist/` directory. This project distributes no sdist and does not put
+its RST documentation inside the wheel; the repository remains the
+documentation source.
+
+The first migration of an older installation created with
+`--system-site-packages`, or one using an unmanaged `~/opt/bin` launcher, must
+be explicit. The installer retains the old environment until the replacement
+has installed and passed verification:
+
+```bash
+python3.14 tools/install_standalone.py install --recreate
+```
 
 Installing into another already-selected Python environment works too:
-`python3.14 -m pip install /path/to/check_formatting`. `pip install` builds a
-wheel internally and installs both the Python package and its console entry
-point. To build the wheel explicitly instead:
+verify the adjacent checksum, then install the wheel directly. `pip` installs
+both the Python package and its console entry point:
 
 ```bash
 cd /path/to/check_formatting
-python3.14 -m pip wheel --wheel-dir dist .
-"${HOME}/opt/check_formatting/bin/python" -m pip install \
-  dist/check_formatting-0.4.0-py3-none-any.whl
+python3.14 tools/build_wheel.py
+sha256sum -c dist/check_formatting-VERSION-py3-none-any.whl.sha256
+python3.14 -m pip install \
+  dist/check_formatting-VERSION-py3-none-any.whl
 ```
+
+Replace `VERSION` with the version printed by the builder. The standalone
+installer does this lookup from the checkout automatically.
 
 The generated wheel is a pure-Python, platform-independent package. Its exact
 filename includes the package version from `check_formatting.__version__`.
@@ -102,17 +143,19 @@ exact `vnu==26.9.5`. See the
 [backend compatibility table](docs/backends.rst#backend-compatibility)
 for every backend and the diagnostic behavior.
 
-To update the standalone installation after updating the checkout:
+To update the standalone installation after updating and committing the
+checkout, rebuild and reinstall its verified wheel:
 
 ```bash
 cd /path/to/check_formatting
-"${HOME}/opt/check_formatting/bin/python" -m pip install --upgrade .
+python3.14 tools/build_wheel.py
+python3.14 tools/install_standalone.py install
 ```
 
-To remove the package and its console entry point:
+To remove the dedicated environment and its owned stable launcher:
 
 ```bash
-"${HOME}/opt/check_formatting/bin/python" -m pip uninstall check-formatting
+python3.14 tools/install_standalone.py uninstall
 ```
 
 The distribution name is `check-formatting`; the Python import package and

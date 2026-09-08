@@ -64,11 +64,12 @@ own dispatch logic, not about a specific backend's real output.
 python3.14 -m pytest tests/ -v
 ```
 
-No virtualenv is required — the test suite's only dependency is
-`pytest` (see `tests/requirements.txt`). Individual tests that exercise a
-specific backend (clang-format, prettier via `npx`, mypy, check_rst, …)
-skip gracefully or are marked accordingly when that backend isn't
-installed; most tests mock the backend entirely and never touch it.
+No virtualenv is required. Install `tests/requirements.txt`; alongside
+`pytest`, it includes the exact release-tool versions exercised by the
+distribution tests. Individual tests that exercise a specific backend
+(clang-format, prettier via `npx`, mypy, check_rst, …) skip gracefully or are
+marked accordingly when that backend isn't installed; most tests mock the
+backend entirely and never touch it.
 
 ## Formatting
 
