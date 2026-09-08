@@ -174,15 +174,95 @@ executable at the same path cannot inherit stale process-local state.  Unknown
 commands used as checker plumbing are not version-gated, and a missing command
 continues through the ordinary missing-backend diagnostic path.
 
+=====================
+Installation routes
+=====================
+
+Two independent questions, for every backend: does a distro package it at a
+usable version (Ubuntu, Gentoo — the two hosts this project has verified
+against; see :doc:`roadmap/backend-install-policy` for the underlying
+research), and can a project pin its own version instead of the system one.
+"System default" is simply whatever ``check_formatting`` resolves first on
+``PATH`` — installing a distro package is enough for that. A project-specific
+pin instead means installing the backend somewhere project-scoped (a
+project's own virtual environment, ``node_modules/``, etc.) and making sure
+that location is earlier on ``PATH`` when ``check_formatting`` runs — the
+adapter never discovers or prefers either on its own initiative; this is a
+property of the invocation environment, not a feature this tool implements.
+The paragraphs below carry the caveats a table alone would flatten away (a
+missing distro package, a version gap worth knowing about, a fallback that
+doesn't fail loudly); this table is only for a fast lookup.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 26 26 32
+
+   * - Backend
+     - Ubuntu 26.04 (``apt``)
+     - Gentoo (Portage)
+     - Project-specific pin
+   * - ``clang-format``
+     - ``clang-format`` — 2 majors behind upstream
+     - ``llvm-core/clang`` — 1 behind its own tree
+     - PyPI ``clang-format``
+   * - ``clang-tidy``
+     - ``clang-tidy`` (same LLVM package family)
+     - ``llvm-core/clang`` (same package)
+     - PyPI ``clang-tidy`` (maintained separately from the ``clang-format``
+       package above; can lag it)
+   * - ``meson``
+     - ``meson`` — 2 minors behind upstream
+     - ``dev-build/meson`` — 1 behind its own tree
+     - PyPI ``meson``
+   * - ``prettier``
+     - not distro-packaged (Node ecosystem)
+     - not distro-packaged
+     - npm ``package.json``/``package-lock.json`` — see the gotcha above
+   * - ``ruff``
+     - not packaged at all
+     - ``dev-util/ruff`` — 1 patch behind upstream
+     - PyPI ``ruff`` (distinct from Astral's own system-wide standalone
+       installer)
+   * - ``mypy``
+     - ``mypy``/``python3-mypy`` — a full **major** version behind upstream
+     - ``dev-python/mypy`` — 1 behind its own tree
+     - PyPI ``mypy``
+   * - ``check_rst``
+     - n/a — first-party, no distro or PyPI package
+     - n/a
+     - n/a — see check_rst's own installation guide
+   * - ``cmake-format``
+     - ``cmake-format`` (matches upstream)
+     - not in the main tree at all
+     - PyPI ``cmake-format`` — the only practical Gentoo route
+   * - ``west``
+     - ``west`` (matches upstream)
+     - not in the main tree at all
+     - PyPI ``west`` — Zephyr's own recommended default, not merely a
+       fallback
+   * - ``shellcheck``
+     - ``shellcheck`` (matches upstream)
+     - ``dev-util/shellcheck-bin`` (matches upstream)
+     - PyPI ``shellcheck-py``, bundling the official prebuilt binary
+   * - ``vnu``
+     - not packaged at all
+     - not packaged at all
+     - npm ``vnu-jar``, exposed via ``node_modules/.bin`` — see below
+
 ===================================
 Backend installation and behavior
 ===================================
 
 ``clang-format`` (``cpp``)
    Part of the LLVM toolchain.  Install via the system package manager
-   (``sudo apt install clang-format`` on Debian/Ubuntu, ``brew install
-   llvm`` on macOS).  It cannot report *which* rule a file violates or
-   *why* — the only diagnostic it emits is the generic
+   (``sudo apt install clang-format`` on Debian/Ubuntu — currently 2 major
+   LLVM releases behind upstream there; ``emerge llvm-core/clang`` on
+   Gentoo; ``brew install llvm`` on macOS).  For a project-specific pin
+   instead, ``pip install clang-format`` in the project's own virtual
+   environment and activate it before invoking ``check_formatting`` — the
+   adapter resolves whichever ``clang-format`` is first on ``PATH``, with
+   no preference of its own.  It cannot report *which* rule a file violates
+   or *why* — the only diagnostic it emits is the generic
    ``[-Wclang-format-violations]`` warning, meaning "this file would look
    different after formatting".  Run ``--diff`` to see the actual changes
    it would make; ``--verbose`` produces identical output to plain check
@@ -190,9 +270,12 @@ Backend installation and behavior
 
 ``meson format`` (``meson``)
    Provided by Meson itself; ``--check-only`` requires Meson ≥ 1.5.0.
-   Install via pip or the system package manager (``pip install meson``).
-   Like clang-format, it exposes no rule-level diagnostics beyond
-   pass/fail.
+   Install via the system package manager (``sudo apt install meson`` on
+   Debian/Ubuntu — currently 2 minor releases behind upstream there;
+   ``emerge dev-build/meson`` on Gentoo) or ``pip install meson`` in a
+   project's own virtual environment for a project-specific pin, activated
+   before invoking ``check_formatting``.  Like clang-format, it exposes no
+   rule-level diagnostics beyond pass/fail.
 
    The adapter always passes ``-c meson.format`` (Meson's own
    ``--configuration`` flag), so a ``meson.format`` file must exist at the
@@ -202,7 +285,9 @@ Backend installation and behavior
    ``meson.build``/``meson.options`` file actually needs reformatting.
 
 ``prettier`` (``web``, ``json``, ``ini``, ``yaml``)
-   A Node.js tool, not a standalone system binary.  It needs Node.js
+   A Node.js tool, not a standalone system binary, and never itself
+   distro-packaged — only Node.js/npm are (``sudo apt install nodejs npm``
+   on Debian/Ubuntu, ``emerge net-libs/nodejs`` on Gentoo). It needs Node.js
    (≥ 18 recommended) and npm installed, plus the project's own
    dependencies installed from ``package.json`` at the repository root
    (``npm install``, which populates ``node_modules/``).  The wrapper
@@ -226,14 +311,25 @@ Backend installation and behavior
    or ``jsonc`` parser per file via ``.prettierrc`` overrides.
 
 ``ruff`` (``python``)
-   Python's formatter and linter in one binary.  Install via pip
-   (``pip install ruff``).  Backs both format (``ruff format``) and lint
+   Python's formatter and linter in one binary. Not packaged in Ubuntu's
+   ``apt`` repositories at all; Gentoo packages ``dev-util/ruff``, currently
+   1 patch release behind upstream. Install via ``pip install ruff`` for a
+   project-specific pin in the project's own virtual environment (activated
+   before invoking ``check_formatting``) — distinct from Astral's own
+   standalone installer script, which installs system-wide only, not
+   project-scoped. Backs both format (``ruff format``) and lint
    (``ruff check``); both must pass.
 
 ``mypy`` (``mypy``)
    Python's static type-checker.  Resolved from ``PATH`` like every other
-   backend (see :doc:`guide`'s "Installation" section).  Install via the system package
-   manager or pip.  Reads its own configuration from ``[tool.mypy]`` in
+   backend (see :doc:`guide`'s "Installation" section).  Install via the
+   system package manager (``sudo apt install mypy`` on Debian/Ubuntu —
+   currently a full **major** version behind upstream there, the largest
+   gap of any backend this project has checked; ``emerge dev-python/mypy``
+   on Gentoo) or ``pip install mypy`` in a project's own virtual
+   environment for a project-specific pin, activated before invoking
+   ``check_formatting`` — the most common way projects already pin mypy.
+   Reads its own configuration from ``[tool.mypy]`` in
    the consuming project's ``pyproject.toml`` — entirely independent of
    ``.check_formatting.toml``.
 
@@ -260,8 +356,13 @@ Backend installation and behavior
    for its full contract.
 
 ``clang-tidy`` (``clang-tidy`` — optional)
-   Part of the LLVM toolchain, installed the same way as clang-format.
-   Additionally requires an up-to-date ``compile_commands.json`` in the
+   Part of the LLVM toolchain, installed the same way as clang-format
+   (``sudo apt install clang-tidy`` on Debian/Ubuntu; ``emerge
+   llvm-core/clang`` on Gentoo — the same package provides both binaries).
+   For a project-specific pin, ``pip install clang-tidy`` — maintained as a
+   separate PyPI package from ``clang-format``'s own, and can sit at a
+   different version from it.  Additionally requires an up-to-date
+   ``compile_commands.json`` in the
    build directory named by ``.check_formatting.toml``'s
    ``[clang_tidy].build_dir`` (generated automatically by Meson on
    ``meson compile``).  A project with no ``[clang_tidy]`` section skips
@@ -269,18 +370,31 @@ Backend installation and behavior
    all.
 
 ``cmake-format`` (``cmake`` — optional, CMake-based projects only)
-   Install via pip (``pip install cmake-format``).  Not relevant to
+   Install via the system package manager (``sudo apt install
+   cmake-format`` on Debian/Ubuntu, matching upstream) or ``pip install
+   cmake-format`` in a project's own virtual environment for a
+   project-specific pin.  Not in Gentoo's main Portage tree at all — the
+   ``pip`` route is the only practical option there.  Not relevant to
    Meson-based projects.
 
 ``west`` (``kconfig`` — optional, Zephyr/west projects only)
-   Part of a Zephyr-style West workspace.  Requires at least one entry in
-   ``.check_formatting.toml``'s ``[kconfig].build_combos``; a project
-   with none skips this checker cleanly, without requiring ``west`` on
-   ``PATH``.
+   Part of a Zephyr-style West workspace.  Install via the system package
+   manager (``sudo apt install west`` on Debian/Ubuntu, matching upstream;
+   not in Gentoo's main tree) or ``pip install west`` in a project's own
+   virtual environment — actually Zephyr's own recommended default, not
+   merely a fallback for Gentoo's missing package.  Requires at least one
+   entry in ``.check_formatting.toml``'s ``[kconfig].build_combos``; a
+   project with none skips this checker cleanly, without requiring
+   ``west`` on ``PATH``.
 
 ``shellcheck`` (``shell`` — optional)
    Install via the system package manager (``sudo apt install
-   shellcheck`` on Debian/Ubuntu, ``brew install shellcheck`` on macOS).
+   shellcheck`` on Debian/Ubuntu, ``emerge dev-util/shellcheck-bin`` on
+   Gentoo, ``brew install shellcheck`` on macOS — all three currently match
+   upstream exactly). For a project-specific pin instead, ``pip install
+   shellcheck-py`` bundles the official prebuilt binary in a project's own
+   virtual environment; a genuine alternative even though the distro
+   packages above are already current, not only a fallback for a gap.
    The adapter invokes ``shellcheck`` from the project root without replacing
    its native policy, so a committed ``.shellcheckrc`` is the right place for
    dialect, sourced-file, severity, and optional-check settings.  A Bash
@@ -363,7 +477,17 @@ Backend installation and behavior
       ]
 
    Version ``26.9.5`` (upstream commit ``a9333cb``) is the only version this
-   adapter accepts and is integration-tested on this host.  Its ``vnu.jar``
+   adapter accepts and is integration-tested on this host. Not packaged by
+   Ubuntu's or Gentoo's package repositories at all — the two routes below
+   are the only ones available, and ``check_formatting`` does not prefer
+   either: it runs whichever ``vnu`` its invocation environment resolves
+   first on ``PATH``. For a project-specific pin, ``npm install --save-dev
+   vnu-jar@26.9.5`` creates ``node_modules/.bin/vnu``; invoking
+   ``check_formatting`` through an npm script (or any launcher that exposes
+   ``node_modules/.bin`` on ``PATH``) resolves that pinned executable ahead
+   of any system-wide one. The system-wide route below instead installs one
+   centrally managed, integrity-verified executable for projects that
+   intentionally share a single tested backend version. Its ``vnu.jar``
    SHA-256 is
    ``b37a0a67cde28d6a3b361f4c774cbd80fe3e1fde38824304e295c8d764296756``.
    Install that exact official ``vnu-jar`` package into ``~/opt``; npm is used

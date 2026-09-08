@@ -6,7 +6,8 @@
 Backend installation policy: system vs. project-specific, per distro
 ######################################################################
 
-:Status: Proposed.
+:Status: Shipped (2026-09-08) in :doc:`../backends`'s "Installation
+   routes" table and per-backend paragraphs.
 :Sources: A live conversation auditing installed-vs-latest backend
    versions across two real hosts — an Ubuntu 26.04 ("resolute") host
    and a Gentoo host ("gl63", reached via SSH at the user's direction) —
@@ -33,13 +34,14 @@ project-local ``.venv`` itself. A caller that intentionally wants a
 project-scoped tool must expose it through ``PATH`` before invoking the
 utility.
 
-Runtime compatibility is now a separate, shipped layer on top of this
+Runtime compatibility is a separate, shipped layer on top of this
 installation policy: every backend has a version probe and explicit supported
 CLI interval in :doc:`../backends`' "Backend compatibility" section.
 The interval tells the adapter which CLI versions it understands; it does not
-choose, install, or pin a backend for a consuming project.  This epic's
-remaining proposed work concerns that installation and pinning guidance, so
-its status remains Proposed rather than being closed by the runtime feature.
+choose, install, or pin a backend for a consuming project. This epic's own
+installation and pinning guidance is the "Installation routes" table and the
+per-backend paragraphs immediately below it in that same page — a related but
+distinct concern from the compatibility interval, now also shipped.
 
 That single mechanism turns out to cover every third-party backend already —
 this session's own research (below) found a legitimate, ecosystem-native,
@@ -185,46 +187,54 @@ executable for projects that intentionally share one tested backend version.
 Proposed work
 ***************
 
-Restate the general mechanism once, prominently, in the Backends section's
-existing intro paragraph (which already gained the ``vnu``-rationale
-sentence in commit ``2ceeee5``): "system default" is simply whatever
-resolves first on ``PATH``; a project gets a project-specific version by
-installing it somewhere of its own choosing and ensuring that location is
-first on ``PATH`` when ``check_formatting`` runs — not a feature this tool
-implements, a consequence of how ``PATH`` lookup already works.
+Shipped. The general mechanism is restated once, prominently, at the top of
+:doc:`../backends`'s new "Installation routes" section: "system default" is
+simply whatever resolves first on ``PATH``; a project gets a
+project-specific version by installing it somewhere of its own choosing and
+ensuring that location is first on ``PATH`` when ``check_formatting`` runs —
+not a feature this tool implements, a consequence of how ``PATH`` lookup
+already works.
 
-Then, for each backend paragraph, add a consistent structure that today's
-paragraphs only partially have:
+Each backend paragraph now carries a consistent structure:
 
 1. Ubuntu install command, with a version-currency note when the
-   packaged version meaningfully lags upstream (already true for
+   packaged version meaningfully lags upstream (true for
    ``clang-format``/``clang-tidy``, ``meson``, and especially ``mypy`` — a
-   full major version behind is worth a reader's attention, not silently
-   left to be discovered by a version mismatch later).
-2. Gentoo install command (``emerge <atom>``), alongside the existing
-   Ubuntu one — currently entirely absent from every backend paragraph.
-   Note explicitly where a package doesn't exist in the main tree at all
+   full major version behind, called out prominently rather than left to be
+   discovered by a version mismatch later).
+2. Gentoo install command (``emerge <atom>``), alongside the Ubuntu one.
+   Explicitly noted where a package doesn't exist in the main tree at all
    (``cmake-format``, ``west``), so a Gentoo-using reader isn't left
    assuming an omission is an oversight.
 3. Project-specific pin, named explicitly with the concrete package
-   and version-pin syntax (``pip install clang-format==23.1.0`` in a
-   project's own venv, etc.) for every backend that has one, plus the one
-   sentence of "how to make it take priority" (activate the venv before
-   invoking ``check_formatting``) rather than leaving that connection
-   implicit.
-4. Where no packaged project-specific route exists (currently ``check_rst``),
-   say so explicitly rather than silently omitting the row — a missing entry
-   otherwise reads as an oversight rather than a fact.
+   (``pip install clang-format`` in a project's own venv, etc.) for every
+   backend that has one — which turned out to be every backend, including
+   ``vnu`` (see the correction below) — plus the one sentence of "how to
+   make it take priority" (activate the venv, or invoke through an npm
+   script for ``prettier``/``vnu``, before running ``check_formatting``)
+   rather than leaving that connection implicit.
+4. Where no packaged project-specific route exists (only ``check_rst``),
+   said so explicitly rather than silently omitting the row.
 
-Add a compact summary table (the shape of this epic's own evidence table
-above, without the "Notes" column) near the top of the Backends section
-for scannability — the existing per-backend prose stays authoritative for
-the caveats a table would flatten away (prettier's silent-cache-fallback
-risk, vnu's architectural exception), exactly the lesson already learned
-from the ``.formatting-ignore`` table earlier in this project's own
+A compact summary table (the shape of this epic's own evidence table
+above, without the "Notes" column) sits at the top of that section for
+scannability — the per-backend prose stays authoritative for the caveats a
+table would flatten away (prettier's silent-cache-fallback risk, the exact
+npm-script mechanism that makes vnu's pin work), exactly the lesson already
+learned from the ``.formatting-ignore`` table earlier in this project's own
 roadmap (see :doc:`adopter-onboarding-guide`, item 5): a table communicates
 structure, prose carries the nuance a table would wrongly imply is
 uniform.
+
+One correction made while shipping this, independent of commit ``7403560``'s
+earlier one: this epic's own "vnu has no project-specific route" claim
+(the version this epic shipped with before Codex corrected it) was tested
+directly rather than taken on faith — ``npm run`` genuinely does prepend
+``node_modules/.bin`` to the child process's ``PATH``, confirmed with a
+throwaway script, so a project-local ``vnu-jar`` install reached through an
+npm script *is* picked up by ``check_formatting``'s bare ``PATH`` lookup,
+the same as every other backend. The corrected claim, not the original one,
+is what shipped.
 
 This directly extends, rather than contradicts, the already-shipped
 :doc:`adopter-onboarding-guide` item 9 ("one supported install route per
@@ -245,30 +255,35 @@ Acceptance criteria
 *********************
 
 * Every backend paragraph states, or explicitly disclaims, a
-  project-specific pinning route.
+  project-specific pinning route — verified: all eleven do (ten name a
+  concrete package; ``check_rst`` explicitly disclaims one).
 * Every backend paragraph that has a real Gentoo package gets an
-  ``emerge`` line; every one that doesn't says so explicitly.
-* The ``vnu`` and ``prettier`` paragraphs' existing fixes (commit
-  ``2ceeee5``) are not duplicated or contradicted by the new general
-  structure — this epic's work should read as one coherent policy applied
-  everywhere, not two one-off fixes plus nine differently-shaped
-  paragraphs.
+  ``emerge`` line; every one that doesn't says so explicitly — verified
+  against this epic's own evidence table.
+* The ``vnu`` and ``prettier`` paragraphs' existing fixes (commits
+  ``2ceeee5`` and ``7403560``) are not duplicated or contradicted by the
+  new general structure — ``vnu``'s paragraph now states its Ubuntu/Gentoo
+  absence and its ``vnu-jar`` project-specific route inline, alongside
+  (not instead of) the existing gotchas and the system-wide ``~/opt``
+  recipe.
 * A reader asking "does backend X have a distro package, and can I pin a
-  project-specific version instead" should find the answer in that
+  project-specific version instead" now finds the answer in that
   backend's own paragraph without needing to ask, the way this session's
   own conversation partner had to.
+
+Validated: ``check_rst`` (0 errors, 0 warnings, clean Sphinx build) and the
+full test suite (293 passed, 2 skipped) after this revision.
 
 ************************
 Recommended sequencing
 ************************
 
-No dependency on any other epic's remaining items. The highest-value
-single fix, if done alone before the rest: ``mypy``'s paragraph, given the
-full major-version gap found this session and that project's own
-``strict = true`` mypy configuration in ``pyproject.toml`` makes a version
-bump behavior-relevant, not just a version-number curiosity. The rest can
-follow in any order — each backend's paragraph is independent of the
-others.
+Shipped in the order this section originally recommended: ``mypy``'s
+paragraph (the full major-version gap, behavior-relevant given this
+project's own ``strict = true`` configuration) got the same explicit
+treatment as every other backend, alongside the rest rather than as an
+isolated fix — the whole set shipped together in one pass once the
+underlying research (and Codex's two corrections to it) was settled.
 
 **************
 Out of scope
