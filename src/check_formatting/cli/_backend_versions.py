@@ -108,7 +108,7 @@ _BACKEND_VERSION_POLICIES: Final[dict[str, BackendVersionPolicy]] = {
         "cmake-format",
         ("cmake-format",),
         ("--version",),
-        _pattern(r"cmake-format\s+"),
+        _pattern(r"^"),
         ">=0.6.13,<0.7.0",
         (0, 6, 13),
         (0, 7, 0),
