@@ -53,7 +53,7 @@ def test_backend_version_policies_cover_every_external_cli() -> None:
         ("mypy", "mypy 2.2.0 (compiled: yes)\n", (2, 2, 0)),
         ("check_rst", "check_rst 0.5.0\nCopyright...\n", (0, 5, 0)),
         ("clang-tidy", "LLVM (http://llvm.org/):\n  LLVM version 22.1.8\n", (22, 1, 8)),
-        ("cmake-format", "cmake-format 0.6.13\n", (0, 6, 13)),
+        ("cmake-format", "0.6.13\n", (0, 6, 13)),
         ("west", "West version: v1.5.0\n", (1, 5, 0)),
         ("shellcheck", "ShellCheck - shell script analysis tool\nversion: 0.11.0\n", (0, 11, 0)),
         ("vnu", "26.9.5 (a9333cb)\n", (26, 9, 5)),
