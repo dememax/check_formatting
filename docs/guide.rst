@@ -57,11 +57,14 @@ implicitly; migrate it once with::
 Installing into another already-selected Python environment is also supported
 after checking the wheel against its generated sidecar::
 
-   sha256sum -c dist/check_formatting-VERSION-py3-none-any.whl.sha256
-   python3.14 -m pip install dist/check_formatting-VERSION-py3-none-any.whl
+   cd dist
+   sha256sum -c check_formatting-VERSION-py3-none-any.whl.sha256
+   python3.14 -m pip install check_formatting-VERSION-py3-none-any.whl
 
 Replace ``VERSION`` with the version printed by the builder. The standalone
-installer derives the exact filename from the checkout automatically.
+installer derives the exact filename from the checkout automatically. The
+checksum records the wheel basename, so verification runs from the directory
+that contains both artifacts.
 
 ``--version`` prints the release version followed by the copyright and
 license lines; the same two lines are appended to ``--help``'s epilog,

@@ -87,13 +87,15 @@ both the Python package and its console entry point:
 ```bash
 cd /path/to/check_formatting
 python3.14 tools/build_wheel.py
-sha256sum -c dist/check_formatting-VERSION-py3-none-any.whl.sha256
-python3.14 -m pip install \
-  dist/check_formatting-VERSION-py3-none-any.whl
+cd dist
+sha256sum -c check_formatting-VERSION-py3-none-any.whl.sha256
+python3.14 -m pip install check_formatting-VERSION-py3-none-any.whl
 ```
 
 Replace `VERSION` with the version printed by the builder. The standalone
-installer does this lookup from the checkout automatically.
+installer does this lookup from the checkout automatically. A checksum file's
+wheel name is relative to the directory containing both artifacts, hence the
+explicit `cd dist` above.
 
 The generated wheel is a pure-Python, platform-independent package. Its exact
 filename includes the package version from `check_formatting.__version__`.
