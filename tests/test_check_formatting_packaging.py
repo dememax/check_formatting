@@ -16,9 +16,9 @@ from check_formatting import __version__
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_package_version_is_0_4_0() -> None:
-    """The backend compatibility release must advertise its public version."""
-    assert __version__ == "0.4.0"
+def test_package_version_is_0_5_0() -> None:
+    """The release-tooling and backend-install-policy release must advertise its public version."""
+    assert __version__ == "0.5.0"
 
 
 def test_wheel_prunes_deleted_module_left_in_build_tree(tmp_path: Path) -> None:
