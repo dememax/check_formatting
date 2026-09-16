@@ -893,6 +893,40 @@ def check_formatting(
     return True
 
 
+_CHECK_ALIASES: dict[str, str] = {
+    # Maps a checker's own display name (as shown in the results table,
+    # e.g. "shellcheck (shell scripts)") to its internal --checks category
+    # name, for the case where a user reasonably guesses the tool's name
+    # rather than check_formatting's category key for it.
+    "shellcheck": "shell",
+}
+
+
+def _check_name(value: str) -> str:
+    """``--checks``' argparse ``type=``: resolve aliases, then validate against :data:`_CHECKERS`.
+
+    ``--checks`` is ``nargs='+'``, so a FILE argument typed right after it
+    (``--checks shell scripts/status.sh``) is greedily consumed as another
+    check name instead of falling through to the ``FILE`` positional. When
+    that happens, the rejected value is a file path, not a typo'd check
+    name — append a hint pointing at the actual fix (reorder, or ``--``)
+    instead of leaving the reader to suspect the path itself is wrong.
+    """
+    canonical = _CHECK_ALIASES.get(value, value)
+    if canonical in _CHECKERS:
+        return canonical
+    choices = ", ".join(repr(name) for name in _CHECKERS)
+    message = f"invalid choice: {value!r} (choose from {choices})"
+    if "/" in value or pathlib.Path(value).exists():
+        message += (
+            f"\nnote: {value!r} looks like a file path, not a check name — if you meant to scope "
+            "--checks to specific files, put them before --checks (`check_formatting <files> "
+            "--checks <name>`) or separate them with `--` (`check_formatting --checks <name> -- "
+            "<files>`)"
+        )
+    raise argparse.ArgumentTypeError(message)
+
+
 # ---------------------------------------------------------------------------
 # Standalone entry point
 # ---------------------------------------------------------------------------
@@ -967,8 +1001,14 @@ Examples:
       Fix formatting in those two files only.
 
   check_formatting --checks cpp -- src/Foo.cpp
-      Run only the C++ checker on a specific file (use -- to separate
-      FILE arguments from option arguments when needed).
+      Run only the C++ checker on a specific file. --checks is nargs='+',
+      so it greedily consumes anything typed right after it that isn't
+      itself a flag — including a FILE path. Separate them with -- as
+      above, or reorder instead:
+        check_formatting src/Foo.cpp --checks cpp
+      Both work. check_formatting --checks cpp src/Foo.cpp (no -- and
+      FILE straight after --checks) does NOT: it fails with "invalid
+      choice: 'src/Foo.cpp'", because --checks swallowed the file path.
 
   check_formatting --checks clang-tidy
       Run clang-tidy static analysis (not in the default set).
@@ -999,11 +1039,12 @@ License: {__license__}
         "--checks",
         nargs="+",
         metavar="CHECK",
-        choices=list(_CHECKERS),
+        type=_check_name,
         default=None,
         help=(
             "Checks to run (default: .check_formatting.toml's `checks` list). "
-            f"Valid names: {', '.join(sorted(_CHECKERS))}. A name not in the "
+            f"Valid names: {', '.join(sorted(_CHECKERS))} (a checker's own tool name, e.g. "
+            "'shellcheck' for 'shell', is also accepted). A name not in the "
             "default list must be requested explicitly here — it may need extra "
             "setup (e.g. clang-tidy's compile database) or simply not apply to "
             "this project's build system (e.g. cmake/kconfig on a Meson "

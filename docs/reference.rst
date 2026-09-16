@@ -279,6 +279,12 @@ Usage
    # Select checkers explicitly
    check_formatting --checks cpp meson
 
+   # Select one checker AND scope it to one file — order matters: --checks
+   # is nargs='+', so a FILE typed right after it is swallowed as another
+   # check name instead. Separate with -- or put FILE first:
+   check_formatting --checks cpp -- src/example.cpp
+   check_formatting src/example.cpp --checks cpp
+
    # Shorten the report at the first failed checker (every checker still runs)
    check_formatting --fail-fast
 
