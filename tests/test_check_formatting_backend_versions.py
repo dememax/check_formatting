@@ -32,7 +32,7 @@ def test_backend_version_policies_cover_every_external_cli() -> None:
         "prettier": ">=3.0.0,<4.0.0",
         "ruff": ">=0.16.5,<0.17.0",
         "mypy": ">=1.19.0,<3.0.0",
-        "check_rst": ">=0.5.0,<0.6.0",
+        "check_rst": ">=0.5.0,<0.7.0",
         "clang-tidy": ">=21.0.0,<24.0.0",
         "cmake-format": ">=0.6.13,<0.7.0",
         "west": ">=1.5.0,<2.0.0",
@@ -41,6 +41,15 @@ def test_backend_version_policies_cover_every_external_cli() -> None:
     }
 
     assert {name: policy.supported for name, policy in _backend_versions._BACKEND_VERSION_POLICIES.items()} == expected
+
+
+@pytest.mark.parametrize(
+    ("version", "supported"),
+    [((0, 5, 0), True), ((0, 6, 0), True), ((0, 7, 0), False)],
+)
+def test_check_rst_supported_version_range(version: tuple[int, int, int], supported: bool) -> None:
+    policy = _backend_versions._BACKEND_VERSION_POLICIES["check_rst"]
+    assert _backend_versions._version_is_supported(policy, version) is supported
 
 
 @pytest.mark.parametrize(
