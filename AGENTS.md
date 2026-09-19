@@ -112,8 +112,11 @@ sibling's level; do not copy or hand-count title adornments.
 
 When reading, use `check_rst outline FILE` if the structure or target is
 unknown and `check_rst context ENTRY FILE` for a known entry.  Both report
-complete physical ranges.  Use `refs` for reference relationships and
-`compare` to explain semantic changes.  Do not rediscover document structure
+complete physical ranges.  Explicit labels appear in `outline`; use
+`context LABEL FILE` for a known file and `targets --exact LABEL` when the
+file is unknown.  Use `refs FILE` for document relationships and
+`refs --target LABEL` for exact label uses.  Use `compare` to explain semantic
+changes.  Do not rediscover document structure
 with `grep`/`head`/`tail`/`sed`, and do not truncate `diff`: an incomplete
 patch can look applicable.
 

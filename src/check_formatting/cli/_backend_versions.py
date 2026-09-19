@@ -91,9 +91,9 @@ _BACKEND_VERSION_POLICIES: Final[dict[str, BackendVersionPolicy]] = {
         ("check_rst",),
         ("--version",),
         _pattern(r"check_rst\s+"),
-        ">=0.5.0,<0.6.0",
+        ">=0.5.0,<0.7.0",
         (0, 5, 0),
-        (0, 6, 0),
+        (0, 7, 0),
     ),
     "clang-tidy": BackendVersionPolicy(
         "clang-tidy",

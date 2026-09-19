@@ -143,7 +143,7 @@ or raw output, and supported contract.
      - ``>=1.19.0,<3.0.0``
    * - ``check_rst``
      - ``rst``
-     - ``>=0.5.0,<0.6.0``
+     - ``>=0.5.0,<0.7.0``
    * - ``clang-tidy``
      - ``clang-tidy``
      - ``>=21.0.0,<24.0.0``
