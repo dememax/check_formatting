@@ -16,9 +16,9 @@ from check_formatting import __version__
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_package_version_is_0_5_1() -> None:
-    """The check_rst 0.6 compatibility release must advertise its public version."""
-    assert __version__ == "0.5.1"
+def test_package_version_is_0_5_2() -> None:
+    """The check_rst 0.7 compatibility release must advertise its public version."""
+    assert __version__ == "0.5.2"
 
 
 def test_wheel_prunes_deleted_module_left_in_build_tree(tmp_path: Path) -> None:
