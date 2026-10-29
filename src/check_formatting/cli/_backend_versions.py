@@ -73,9 +73,9 @@ _BACKEND_VERSION_POLICIES: Final[dict[str, BackendVersionPolicy]] = {
         ("ruff",),
         ("--version",),
         _pattern(r"ruff\s+"),
-        ">=0.16.5,<0.17.0",
+        ">=0.16.5,<0.18.0",
         (0, 16, 5),
-        (0, 17, 0),
+        (0, 18, 0),
     ),
     "mypy": BackendVersionPolicy(
         "mypy",

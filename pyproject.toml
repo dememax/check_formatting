@@ -35,7 +35,7 @@ where = ["src"]
 [tool.ruff]
 line-length = 120
 target-version = "py314"
-required-version = ">=0.16.5,<=0.16.6"
+required-version = "==0.17.3"
 
 [tool.ruff.lint]
 # B:   flake8-bugbear (design/logic issues)
