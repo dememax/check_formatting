@@ -30,7 +30,7 @@ def test_backend_version_policies_cover_every_external_cli() -> None:
         "clang-format": ">=21.0.0,<24.0.0",
         "meson": ">=1.5.0,<2.0.0",
         "prettier": ">=3.0.0,<4.0.0",
-        "ruff": ">=0.16.5,<0.17.0",
+        "ruff": ">=0.16.5,<0.18.0",
         "mypy": ">=1.19.0,<3.0.0",
         "check_rst": ">=0.5.0,<0.8.0",
         "clang-tidy": ">=21.0.0,<24.0.0",
@@ -49,6 +49,16 @@ def test_backend_version_policies_cover_every_external_cli() -> None:
 )
 def test_check_rst_supported_version_range(version: tuple[int, int, int], supported: bool) -> None:
     policy = _backend_versions._BACKEND_VERSION_POLICIES["check_rst"]
+    assert _backend_versions._version_is_supported(policy, version) is supported
+
+
+@pytest.mark.parametrize(
+    ("version", "supported"),
+    [((0, 16, 4), False), ((0, 17, 3), True), ((0, 18, 0), False)],
+    ids=["below-minimum", "supported-0.17", "exclusive-maximum"],
+)
+def test_ruff_supported_version_range(version: tuple[int, int, int], supported: bool) -> None:
+    policy = _backend_versions._BACKEND_VERSION_POLICIES["ruff"]
     assert _backend_versions._version_is_supported(policy, version) is supported
 
 
@@ -200,7 +210,7 @@ def test_prettier_verbose_version_banner_cannot_trigger_an_install(
     ("backend", "raw_output"),
     [
         ("ruff", "ruff 0.16.4\n"),
-        ("ruff", "ruff 0.17.0\n"),
+        ("ruff", "ruff 0.18.0\n"),
         ("vnu", "26.9.6 (different)\n"),
     ],
 )
