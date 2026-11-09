@@ -11,8 +11,8 @@ protection: bare mode and selective Git scope").  This is documented as an
 explicit, OPTIONAL per-checker contract — most other checkers' backends have
 no equivalent native mechanism at all (meson format, ruff format, mypy) or
 one of unconfirmed reliability outside its primary use case (prettier's
-``--range-start``/``--range-end``) — see development-workflow.rst's "Scope
-guarantee" table for the full per-checker breakdown.
+``--range-start``/``--range-end``) — see README.md's "Scope guarantee:
+file-level, not line-level" table for the full per-checker breakdown.
 
 check and fix (and diff, which previews what fix would do) are scoped
 together when ``git_auto_detected`` is True, to avoid a mismatch where
