@@ -370,7 +370,7 @@ mechanism. It comes in two tiers:
 
 | Checker | Mechanism |
 |---|---|
-| `rst` | check_rst's own bare-mode git integration — native, first-party. |
+| `rst` | check_rst's own bare-mode git integration — native, first-party. Only the adornment geometry follows the changed hunks; see check_rst's guide, "History protection: bare mode and selective Git scope". |
 | `cpp` | clang-format's native `-lines=<start>:<end>`, computed per file from `git diff -U0 HEAD`. |
 
 **Best-effort tier** — heuristic:
@@ -384,7 +384,7 @@ or reconstructable — so `--fix` is necessarily whole-file for them. This
 is a materially lower risk for them than for `rst`: clang-format,
 prettier, and `ruff format` are convergent, idempotent formatters —
 re-running one over already-compliant, untouched lines is a no-op —
-whereas check_rst's adornment-hierarchy remap can rewrite content that is
+whereas check_rst's whole-file adornment geometry can rewrite content that is
 valid but intentionally non-standard, which is exactly what makes
 whole-file scope risky there.
 
@@ -403,7 +403,7 @@ whole-file scope risky there.
 | `kconfig` | west build --cmake-only | N/A — validates merged Kconfig state across all `.conf` files together |
 | `shell` | shellcheck | No known native flag |
 | `vnu` | Nu Html Checker | N/A — report-only conformance analysis |
-| `rst` | check_rst | Yes — check_rst's own git integration |
+| `rst` | check_rst | Yes, for adornment geometry — check_rst's own git integration |
 
 For RST, default Git-scoped fixing uses `check_rst fix --fast` and diff
 mode uses `check_rst diff --fast`. Explicit files and configured recursive

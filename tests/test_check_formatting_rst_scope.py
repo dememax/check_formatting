@@ -4,9 +4,10 @@
 """Tests for the rst checker's file-selection/scope mapping against check_rst's
 documented bare, explicit-file, and recursive modes.
 
-check_rst distinguishes bare invocation (git-diff-scoped: adornment fixes apply only to
-changed hunks) from an invocation given explicit filenames (whole-file adornment scope
-— "use only when the user explicitly confirms that file should be normalized"). Before
+check_rst distinguishes bare invocation (Git-scoped: only the adornment geometry follows
+the changed hunks — check_rst's guide, "History protection: bare mode and selective Git
+scope") from an invocation given explicit filenames (whole-file adornment geometry —
+"use only when the user explicitly confirms that file should be normalized"). Before
 this fix, `_check_rst` collapsed that distinction: `check_formatting`'s own default
 scope (auto-detected git-changed files) was always handed to check_rst as explicit
 arguments — silently upgrading every routine `--fix` to whole-file scope — while
@@ -37,7 +38,7 @@ from check_formatting import cli as check_formatting
 def test_check_rst_auto_detected_files_run_bare_not_explicit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Files that came from check_formatting's own git auto-detection must be handed
     to check_rst bare (no file args) — passing them as explicit arguments instead would
-    silently upgrade check_rst's fix from hunk-scoped to whole-file scoped."""
+    silently upgrade check_rst's fix from hunk-scoped to whole-file adornment geometry."""
     root = tmp_path
     rst_file = root / "guide.rst"
     rst_file.write_text("Guide\n=====\n")

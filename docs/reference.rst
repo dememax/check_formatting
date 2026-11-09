@@ -125,7 +125,9 @@ Native tier
 
 ``rst``
    ``check_rst`` is invoked without explicit filenames for the auto-detected
-   scope, preserving its native Git-hunk behavior.  Fix mode selects
+   scope, preserving its native Git scope: only the adornment geometry
+   follows the changed hunks (``check_rst``'s guide, "History protection:
+   bare mode and selective Git scope").  Fix mode selects
    ``fix --fast`` and diff mode selects ``diff --fast`` so the wrapper's
    mutation-only and preview-only contracts do not trigger duplicate Sphinx
    validation.  A user-provided RST file is intentionally passed explicitly
@@ -172,7 +174,7 @@ Backend scope matrix
      - Native Git-hunk ranges in the auto-detected scope
    * - ``rst``
      - ``check_rst``
-     - Native Git integration in the default scope
+     - Native Git integration in the default scope (adornment geometry)
    * - ``web``, ``json``, ``ini``, ``yaml``
      - ``prettier``
      - Canonically verified best-effort reconstruction with whole-file fallback

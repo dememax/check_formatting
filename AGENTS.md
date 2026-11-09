@@ -106,14 +106,18 @@ selection is Git-aware; naming files or using `--recursive` expresses
 whole-file intent.  In a dirty worktree with unrelated documentation edits,
 use the same owned-file allowlist with `--git-scope` on all three commands.
 
-When writing a heading, declare its intended depth with a placeholder in the
-same form as its sibling titles: when they have an overline, put the same
-9-character line directly above and below the title; when they have only an
-underline, write only a 9-character underline.  Leave a blank line before
-and after.  Let `fix --fast` materialize the syntax.  Reuse a sibling's
-level; do not copy or hand-count title adornments.  Never use one character
-both with and without an overline in a file: ordinary RST reads the two forms
-as different levels, so the intended level becomes ambiguous.
+For a new heading, write a nine-character check_rst title placeholder (a
+check_rst convention, not RST syntax) in the style of its sibling titles, as
+`check_rst outline FILE` shows it on their lines: `o` means the same line
+above and below the title, `u` an underline only.  Leave a blank line before
+and after.  Let `fix --fast` compute the adornment geometry; do not copy a
+sibling's adornment, and never count adornment characters, not even in a
+scratch file.  Never use one character both with and without an overline in
+a file: Docutils reads the two forms as two styles, and `fix` refuses that
+ambiguity.
+
+Global options such as `--sphinx-src` and `--no-config` go before the
+command: `check_rst --no-config check FILE`.
 
 When reading, use `check_rst outline FILE` if the structure or target is
 unknown and `check_rst context ENTRY FILE` for a known entry.  Both report

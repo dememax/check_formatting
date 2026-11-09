@@ -43,8 +43,9 @@ mechanism — not every checker can offer it, and it comes in two tiers:
 
 Native tier — tool-guaranteed, applies to check/verbose/diff/fix alike
     - ``rst``  — check_rst's own bare-mode git integration (native,
-      first-party; see :func:`_check_rst` and check_rst's guide, "History
-      protection: bare mode and selective Git scope").
+      first-party; only the adornment geometry follows the changed hunks —
+      see :func:`_check_rst` and check_rst's guide, "History protection:
+      bare mode and selective Git scope").
     - ``cpp``  — clang-format's native ``-lines=<start>:<end>``, computed
       per file from ``git diff -U0 HEAD`` via :func:`_git_diff_hunk_ranges`
       (see :func:`_check_cpp`).
@@ -79,7 +80,7 @@ necessarily whole-file for them, and always has been.  This is a
 materially lower risk for them than it was for ``rst``: clang-format,
 prettier, and ``ruff format`` are convergent, idempotent formatters —
 re-running one over already-compliant, untouched lines is a no-op —
-whereas check_rst's adornment-hierarchy remap can rewrite headings that
+whereas check_rst's whole-file adornment geometry can rewrite headings that
 are valid RST but intentionally non-standard for this project
 (pandoc-imported docs, historical entries) purely because they don't
 match this project's convention, which is exactly what made whole-file
@@ -107,10 +108,10 @@ check (default)
              [python].dirs; configuration from [tool.mypy] in pyproject.toml
     rst    — check_rst check; three distinct scopes depending on how files
              were selected (see _check_rst's docstring and check_rst's guide,
-             "History protection" for the full rationale): the default
-             git-auto-detected scope runs check_rst check bare (hunk-scoped —
-             preserves check_rst's own "fix only what you changed"
-             contract), a user-typed FILE argument runs check_rst check with
+             "History protection: bare mode and selective Git scope" for the
+             full rationale): the default git-auto-detected scope runs
+             check_rst check bare (Git-scoped — only the adornment geometry
+             follows the changed hunks), a user-typed FILE argument runs check_rst check with
              that file explicitly (whole-file scope — the user asked for
              it), and explicit_files=None (--all, or a direct library
              call) runs check_rst check --recursive on [rst].dir (a genuine
@@ -380,9 +381,10 @@ Checker                 Tool                          Line-range restriction ava
                                                         whole-script by nature regardless
 ``vnu``                 Nu Html Checker                 **N/A** — report-only conformance analysis;
                                                         no source mutation to restrict
-``rst``                 check_rst                      Yes — check_rst's own bare-mode git
-                                                        integration, exploited by ``_check_rst``
-                                                        when the selection is git auto-detected
+``rst``                 check_rst                      Yes, for adornment geometry — check_rst's
+                                                        own bare-mode git integration, exploited by
+                                                        ``_check_rst`` when the selection is git
+                                                        auto-detected
 ======================  ===========================  ============================================
 
 ``cpp`` and ``rst`` genuinely honor a line-scoped ``--fix`` today via a

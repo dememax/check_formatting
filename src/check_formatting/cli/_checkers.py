@@ -83,7 +83,8 @@ def _check_cpp(
     file's actual changed hunks (via :func:`_lines_flags`, computed from
     ``git diff -U0 HEAD``) rather than the whole file — mirroring check_rst's
     own bare-mode hunk scoping and its rationale (see
-    :func:`_check_rst`'s docstring and check_rst's guide, "History protection").
+    :func:`_check_rst`'s docstring and check_rst's guide, "History protection:
+    bare mode and selective Git scope").
     check/verbose/diff are scoped together with fix, not left whole-file,
     specifically so a routine ``--fix`` that only cleans up the diff isn't
     followed by a ``--check`` that fails forever on unrelated, pre-existing
@@ -1287,17 +1288,18 @@ def _check_rst(
     Uses the installed ``check_rst`` console entry point from PATH, on its
     current verb-based CLI (``check``/``fix``/``diff``, global options such
     as ``--sphinx-src``/``--config`` given *before* the verb, git-style —
-    see check_rst's guide, "Global option position").  The Sphinx facts
+    see check_rst's manual, ``docs/man/check_rst.rst``, "GLOBAL OPTIONS").
+    The Sphinx facts
     (``--sphinx-src docs``, the incremental build cache) come from
     ``.check_rst.toml`` at the repository root — a committed, tool-echoed,
     CLI-overridable declaration — so no flags are passed here; check_rst
     discovers it from ``cwd`` (``root``) on its own.
 
-    check_rst distinguishes bare invocation (no file arguments — git-diff-scoped:
-    adornment fixes apply only to changed hunks) from being given explicit
-    filenames (whole-file adornment scope — see check_rst's guide, "History
-    protection: bare mode and selective Git scope").  Three distinct scopes
-    map onto that distinction:
+    check_rst distinguishes bare invocation (no file arguments — Git-scoped:
+    only the adornment geometry follows the changed hunks) from being given
+    explicit filenames (whole-file adornment geometry).  check_rst's guide,
+    "History protection: bare mode and selective Git scope", defines what
+    each scope covers.  Three distinct scopes map onto that distinction:
 
     - *explicit_files* is a list AND *git_auto_detected* is True — these files
       came from ``check_formatting``'s own git auto-detection (the default
@@ -1305,12 +1307,12 @@ def _check_rst(
       changed/untracked set check_rst's own bare mode would select on its
       own.  Run check_rst **bare** rather than handing it that same list as
       explicit arguments — doing the latter would silently upgrade every
-      routine ``--fix`` from hunk-scoped to whole-file scoped, and risk
+      routine ``--fix`` from hunk-scoped to whole-file adornment geometry, and risk
       renormalizing pre-existing, deliberately non-standard adornments
       (historical entries, or externally-adopted documents with their
       own style) elsewhere in a touched file.  Fix mode uses ``fix --fast``
-      here (mutate without the validation phases — check_rst's guide, the
-      "three-step loop": mutate fast, then a separate ``check`` confirms).
+      here (mutate without the validation phases — check_rst's guide, "The
+      three-step loop": mutate fast, then a separate ``check`` confirms).
     - *explicit_files* is a list and *git_auto_detected* is False — the user
       (or a caller) genuinely named these files.  Pass them to check_rst
       directly: whole-file scope is the correct, explicitly-requested
