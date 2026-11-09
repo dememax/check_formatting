@@ -99,7 +99,9 @@ File selection
        configured directory is an error, never a changed-file fallback.
    * - ``-- FILE ...``
      - Exactly the named files, filtered through each checker's configured
-       targets or fixed file domain.
+       targets or fixed file domain.  A directory is a usage error (exit 2)
+       before any checker runs: there is no recursive FILE mode, so use
+       ``--all`` for a full scan.
 
 Configured globs remain authoritative in changed-file and explicit-file
 scopes.  A configured C++ header, TypeScript file, or extensionless shell

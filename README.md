@@ -354,7 +354,7 @@ dispatch" section for the full rationale.
 |---|---|
 | *(none)* | Auto-detected: files changed since HEAD plus untracked files, via git (mirrors check_rst's own default). Nothing changed → reports "nothing to do" and exits 0. |
 | `--all` | Full-repo scan: every file matching each enabled checker's configured globs/dirs, regardless of git state. |
-| `-- FILE ...` | Scope to exactly those files. Each checker filters them through its configured globs/files or fixed file domain. |
+| `-- FILE ...` | Scope to exactly those files. Each checker filters them through its configured globs/files or fixed file domain. A directory is a usage error (exit 2); use `--all` for a full scan. |
 
 ## Optional "git-scoped fix" contract
 

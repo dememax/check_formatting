@@ -1145,7 +1145,8 @@ License: {__license__}
             "auto-detected via git — mirrors check_rst's own default, and matches how "
             "this tool is actually used interactively (see --all for a full-repo scan "
             "instead).  Each checker processes only files matching its configured targets or fixed file domain; "
-            "checkers with no matching files pass vacuously.  Use -- to separate FILE "
+            "checkers with no matching files pass vacuously.  A directory is a usage "
+            "error: name its files, or use --all.  Use -- to separate FILE "
             "arguments from option arguments when needed."
         ),
     )
@@ -1157,6 +1158,15 @@ License: {__license__}
 
     project_root = pathlib.Path.cwd()
     explicit_files = _resolve_explicit_files(args.explicit_files, args.all, project_root)
+    if args.explicit_files and explicit_files is not None:
+        # A directory matches no checker's file targets, so it would pass
+        # vacuously (or reach a backend as a "file"): reject it up front.
+        for file_arg, path in zip(args.explicit_files, explicit_files, strict=True):
+            if path.is_dir():
+                parser.error(
+                    f"argument FILE: {file_arg!r} is a directory — name the files to check, "
+                    "or use --all for a full scan"
+                )
     git_auto_detected = _is_git_auto_detected_scope(args.explicit_files, args.all)
     ok = check_formatting(
         project_root,
